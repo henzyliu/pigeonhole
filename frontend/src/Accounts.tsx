@@ -1,5 +1,6 @@
 import {FormEvent, useEffect, useState} from 'react';
 import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS} from './api';
+import NetworkIcon from './NetworkIcon';
 
 type View =
     | {kind: 'list'}
@@ -77,7 +78,7 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                         <ul className="account-list">
                             {props.accounts.map(a => (
                                 <li key={a.network + a.id}>
-                                    <span className={`net-dot net-${a.network}`}/>
+                                    <NetworkIcon network={a.network} size={22}/>
                                     <div className="account-info">
                                         <div>{a.name || a.id} <span className="muted">· {a.networkName}</span></div>
                                         <div className={`account-state ${a.state}`}>{stateLabel(a)}</div>
@@ -92,7 +93,7 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                     <div className="network-grid">
                         {networks.map(n => (
                             <button key={n.id} className="network-button" disabled={busy} onClick={() => pickNetwork(n.id)}>
-                                <span className={`net-logo net-${n.id}`}/>{n.name}
+                                <NetworkIcon network={n.id} size={28}/>{n.name}
                             </button>
                         ))}
                     </div>
@@ -115,7 +116,8 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                     <button className="link" onClick={() => setView({kind: 'list'})}>← Back</button>
                 </>}
 
-                {view.kind === 'step' && <StepForm step={view.step} busy={busy} onSubmit={v => submit(view.step, v)}/>}
+                {view.kind === 'step' && <StepForm key={stepKey(view.step)} step={view.step} busy={busy}
+                                                   onSubmit={v => submit(view.step, v)}/>}
 
                 {view.kind === 'done' && <>
                     <p>Connected! Your conversations will start appearing in a moment.</p>
@@ -126,6 +128,12 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
             </div>
         </div>
     );
+}
+
+// Each step gets a fresh form; reusing one would carry over the previous
+// step's values (e.g. the password) and miss the new step's defaults.
+function stepKey(step: inbox.LoginStep): string {
+    return [step.type, step.instructions, ...(step.fields ?? []).map(f => f.id), ...(step.cookieNames ?? [])].join('|');
 }
 
 function rank(flowID: string) {
@@ -163,7 +171,7 @@ function stateLabel(a: inbox.Account): string {
 function StepForm(props: {step: inbox.LoginStep; busy: boolean; onSubmit: (values: Record<string, string>) => void}) {
     const {step} = props;
     const [values, setValues] = useState<Record<string, string>>(() =>
-        Object.fromEntries((step.fields ?? []).map(f => [f.id, f.default ?? ''])));
+        Object.fromEntries((step.fields ?? []).map(f => [f.id, f.default || f.options?.[0] || ''])));
 
     const onSubmit = (e: FormEvent) => {
         e.preventDefault();
@@ -191,7 +199,19 @@ function StepForm(props: {step: inbox.LoginStep; busy: boolean; onSubmit: (value
                           value={values.cookies ?? ''} onChange={e => setValues({cookies: e.target.value})} autoFocus/>
             </> : <>
                 {step.instructions && <p>{step.instructions}</p>}
-                {(step.fields ?? []).map((f, i) => (
+                {(step.fields ?? []).map((f, i) => f.options?.length ? (
+                    <fieldset key={f.id} className="field choice-field">
+                        <legend>{f.name}</legend>
+                        {f.options.map(option => (
+                            <label key={option} className={`choice ${values[f.id] === option ? 'selected' : ''}`}>
+                                <input type="radio" name={f.id} value={option} checked={values[f.id] === option}
+                                       onChange={() => setValues(v => ({...v, [f.id]: option}))}/>
+                                {option}
+                            </label>
+                        ))}
+                        {f.description && <small className="muted">{f.description}</small>}
+                    </fieldset>
+                ) : (
                     <label key={f.id} className="field">
                         <span>{f.name}</span>
                         <input type={f.type === 'password' ? 'password' : f.type === 'email' ? 'email' : 'text'}

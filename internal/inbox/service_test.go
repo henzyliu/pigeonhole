@@ -2,10 +2,12 @@ package inbox
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -140,5 +142,23 @@ func TestParseCookies(t *testing.T) {
 		if err != nil || got["sessionid"] != "a" || got["csrftoken"] != "b" {
 			t.Errorf("ParseCookies(%q) = %v, %v", input, got, err)
 		}
+	}
+}
+
+func TestValidateFields(t *testing.T) {
+	fields := []bridgev2.LoginInputDataField{
+		{ID: "mfatype", Name: "Login method", Type: bridgev2.LoginInputFieldTypeSelect, Options: []string{"Authentication app", "Text message"}},
+		{ID: "code", Name: "Code", Validate: func(s string) (string, error) { return strings.ReplaceAll(s, " ", ""), nil }},
+	}
+	values := map[string]string{"mfatype": "Phone", "code": "123 456"}
+	if err := validateFields(fields, values); err == nil {
+		t.Fatal("expected an error for a value that isn't one of the options")
+	}
+	values["mfatype"] = "Text message"
+	if err := validateFields(fields, values); err != nil {
+		t.Fatal(err)
+	}
+	if values["code"] != "123456" {
+		t.Fatalf("expected Validate to normalize the code, got %q", values["code"])
 	}
 }

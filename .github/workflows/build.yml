@@ -32,5 +32,5 @@ jobs:
           CGO_ENABLED: "1"
       - uses: actions/upload-artifact@v4
         with:
-          name: unified-inbox-${{ runner.os }}
+          name: pigeonhole-${{ runner.os }}
           path: ${{ matrix.artifact }}

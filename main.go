@@ -29,7 +29,7 @@ func main() {
 	app := NewApp(svc)
 
 	err = wails.Run(&options.App{
-		Title:     "Unified Inbox",
+		Title:     "Pigeonhole",
 		Width:     1180,
 		Height:    780,
 		MinWidth:  720,
@@ -43,8 +43,8 @@ func main() {
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
 		},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
+		OnStartup:  app.startup,
+		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

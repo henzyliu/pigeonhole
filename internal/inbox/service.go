@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/commands"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/id"
@@ -101,12 +102,23 @@ func bridgeConfig() *bridgeconfig.BridgeConfig {
 			MaxInitialMessages:   50,
 			MaxCatchupMessages:   500,
 			UnreadHoursThreshold: 720,
+			// The queue loads older history in the background. Messenger's
+			// encrypted (personal) chats can *only* be backfilled this way.
+			// Ten batches of 100 caps it at ~1000 older messages per chat.
+			Queue: bridgeconfig.BackfillQueueConfig{
+				Enabled:    true,
+				BatchSize:  100,
+				BatchDelay: 20,
+				MaxBatches: 10,
+			},
 		},
 	}
 }
 
 func (s *Service) addNetwork(dataDir, netID, name string, network bridgev2.NetworkConnector) error {
 	log := s.Log.With().Str("network", netID).Logger()
+	// The owner name predates the Pigeonhole rename. dbutil refuses to open a
+	// database owned by a different name, so it must stay as-is.
 	db, err := dbutil.NewFromConfig("unified-inbox-"+netID, dbutil.Config{
 		PoolConfig: dbutil.PoolConfig{
 			Type:         "sqlite3-fk-wal",
@@ -128,7 +140,10 @@ func (s *Service) addNetwork(dataDir, netID, name string, network bridgev2.Netwo
 
 // Start connects every saved account. It blocks until all bridges are up.
 func (s *Service) Start(ctx context.Context) error {
-	s.ctx = ctx
+	// Login processes log through the context, so attach the logger here or
+	// their messages (which explain why Meta rejected a login) are dropped.
+	s.ctx = s.Log.WithContext(ctx)
+	ctx = s.ctx
 	for _, netID := range s.order {
 		n := s.networks[netID]
 		if err := n.Bridge.Start(ctx); err != nil {
@@ -137,8 +152,47 @@ func (s *Service) Start(ctx context.Context) error {
 		if _, err := n.Bridge.GetUserByMXID(ctx, Me); err != nil {
 			return fmt.Errorf("failed to create %s user: %w", n.Name, err)
 		}
+		if err := s.queueMissingBackfill(ctx, n); err != nil {
+			s.Log.Warn().Err(err).Str("network", netID).Msg("Failed to queue history backfill")
+		}
 	}
 	s.emit("inbox:accounts", nil)
+	return nil
+}
+
+// queueMissingBackfill makes sure every chat has a history backfill task.
+// Bridges only create tasks for chats created while the queue is enabled, and
+// Messenger only queues encrypted history at the moment the PIN is entered,
+// so chats synced before then would otherwise never load older messages.
+// Chats whose task already finished are left alone.
+func (s *Service) queueMissingBackfill(ctx context.Context, n *Network) error {
+	user, err := n.Bridge.GetUserByMXID(ctx, Me)
+	if err != nil {
+		return err
+	}
+	queued := 0
+	for _, login := range user.GetUserLogins() {
+		userPortals, err := n.Bridge.DB.UserPortal.GetAllForLogin(ctx, login.UserLogin)
+		if err != nil {
+			return err
+		}
+		for _, up := range userPortals {
+			portal, err := n.Bridge.GetExistingPortalByKey(ctx, up.Portal)
+			if err != nil {
+				return err
+			} else if portal == nil || portal.MXID == "" || portal.RoomType == database.RoomTypeSpace {
+				continue
+			}
+			if err = n.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, login.ID); err != nil {
+				return err
+			}
+			queued++
+		}
+	}
+	if queued > 0 {
+		s.Log.Info().Str("network", n.ID).Int("chats", queued).Msg("Ensured history backfill tasks")
+		n.Bridge.WakeupBackfillQueue()
+	}
 	return nil
 }
 

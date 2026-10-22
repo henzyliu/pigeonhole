@@ -5,9 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
+	"go.mau.fi/mautrix-meta/pkg/messagix/table"
+	"go.mau.fi/mautrix-meta/pkg/metaid"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -23,6 +28,8 @@ type Chat struct {
 	LastTS  int64  `json:"lastTs"`
 	Unread  int    `json:"unread"`
 	IsDM    bool   `json:"isDm"`
+	// Category is "inbox" (one-to-one), "groups", "marketplace" or "requests".
+	Category string `json:"category"`
 }
 
 type Reaction struct {
@@ -125,6 +132,15 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		chats = append(chats, c)
 	}
 	rows.Close()
+	// Folder portals (e.g. Messenger's Marketplace space) are containers, not
+	// conversations, so they never have messages and shouldn't be listed.
+	chats = slices.DeleteFunc(chats, func(c Chat) bool {
+		portal := s.portalFor(ctx, c.Network, c.RoomID)
+		return portal != nil && portal.RoomType == database.RoomTypeSpace
+	})
+	for i := range chats {
+		chats[i].Category = chatCategory(s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
+	}
 	// DMs without an explicit name are named after the other person.
 	for i := range chats {
 		if chats[i].Name != "" && chats[i].Avatar != "" {
@@ -150,6 +166,56 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		}
 	}
 	return chats, nil
+}
+
+// Chat categories. Marketplace and requests mirror the folders Messenger and
+// Instagram show; the rest of the inbox is split into one-to-one chats
+// ("inbox", shown as People) and group chats.
+const (
+	CategoryInbox       = "inbox"
+	CategoryGroups      = "groups"
+	CategoryMarketplace = "marketplace"
+	CategoryRequests    = "requests"
+)
+
+func (s *Service) portalFor(ctx context.Context, network, roomID string) *bridgev2.Portal {
+	n, ok := s.networks[network]
+	if !ok {
+		return nil
+	}
+	portal, err := n.Bridge.GetPortalByMXID(ctx, id.RoomID(roomID))
+	if err != nil {
+		return nil
+	}
+	return portal
+}
+
+// chatCategory picks the tab a chat belongs in. isDM is the room's own flag,
+// used when the bridge has no portal record for it.
+func chatCategory(portal *bridgev2.Portal, isDM bool) string {
+	switch {
+	case portal == nil && isDM:
+		return CategoryInbox
+	case portal == nil:
+		return CategoryGroups
+	case portal.MessageRequest:
+		return CategoryRequests
+	// On Messenger only Marketplace threads live under a parent folder. The
+	// thread type is checked too, since linking to the folder can fail.
+	case portal.ParentKey.ID != "":
+		return CategoryMarketplace
+	case isMarketplaceThread(portal):
+		return CategoryMarketplace
+	case portal.RoomType == database.RoomTypeDM:
+		return CategoryInbox
+	default:
+		return CategoryGroups
+	}
+}
+
+func isMarketplaceThread(portal *bridgev2.Portal) bool {
+	meta, ok := portal.Metadata.(*metaid.PortalMetadata)
+	return ok && meta.ThreadType == table.MARKETPLACE
 }
 
 func (s *Service) Messages(ctx context.Context, roomID string, beforeTS int64, limit int) ([]Message, error) {
@@ -326,6 +392,9 @@ func (s *Service) MarkRead(ctx context.Context, roomID string) error {
 	receipt := &event.Event{
 		Type:   event.EphemeralEventReceipt,
 		RoomID: id.RoomID(roomID),
+		// Without this flag bridgev2 handles the receipt like a timeline event,
+		// which needs a sender and panics without one.
+		Mautrix: event.MautrixInfo{EventSource: event.SourceEphemeral},
 		Content: event.Content{Parsed: &event.ReceiptEventContent{
 			id.EventID(lastEvent): {event.ReceiptTypeRead: {Me: {Timestamp: time.Now()}}},
 		}},

@@ -23,7 +23,7 @@ type Intent struct {
 
 var _ bridgev2.MatrixAPI = (*Intent)(nil)
 
-func (in *Intent) GetMXID() id.UserID    { return in.mxid }
+func (in *Intent) GetMXID() id.UserID   { return in.mxid }
 func (in *Intent) IsDoublePuppet() bool { return in.mxid == in.c.Store.Me }
 
 func (in *Intent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
@@ -97,7 +97,7 @@ func (in *Intent) DownloadMediaToFile(ctx context.Context, uri id.ContentURIStri
 	if !writable {
 		return callback(src)
 	}
-	tmp, err := os.CreateTemp("", "unified-inbox-*")
+	tmp, err := os.CreateTemp("", "pigeonhole-*")
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="150" y1="100" x2="874" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="0.55" stop-color="#6D4AEF"/>
+      <stop offset="1" stop-color="#9333EA"/>
+    </linearGradient>
+    <linearGradient id="tray" x1="352" y1="476" x2="592" y2="642" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="512" y1="100" x2="512" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Soft shadow under the tile -->
+  <path fill="#1E1B4B" fill-opacity="0.08" d="M285 116H739A185 185 0 0 1 924 301V755A185 185 0 0 1 739 940H285A185 185 0 0 1 100 755V301A185 185 0 0 1 285 116Z"/>
+  <path fill="#1E1B4B" fill-opacity="0.10" d="M285 108H739A185 185 0 0 1 924 293V747A185 185 0 0 1 739 932H285A185 185 0 0 1 100 747V293A185 185 0 0 1 285 108Z"/>
+  <path fill="#1E1B4B" fill-opacity="0.12" d="M285 103H739A185 185 0 0 1 924 288V742A185 185 0 0 1 739 927H285A185 185 0 0 1 100 742V288A185 185 0 0 1 285 103Z"/>
+
+  <!-- Tile -->
+  <path fill="url(#bg)" d="M285 100H739A185 185 0 0 1 924 285V739A185 185 0 0 1 739 924H285A185 185 0 0 1 100 739V285A185 185 0 0 1 285 100Z"/>
+  <path fill="url(#sheen)" d="M285 100H739A185 185 0 0 1 924 285V739A185 185 0 0 1 739 924H285A185 185 0 0 1 100 739V285A185 185 0 0 1 285 100Z"/>
+
+  <!-- Back bubble: your other conversations -->
+  <path fill="#FFFFFF" fill-opacity="0.40"
+        d="M462 236H730A90 90 0 0 1 820 326V470A90 90 0 0 1 750 558V626L668 560H462A90 90 0 0 1 372 470V326A90 90 0 0 1 462 236Z"/>
+
+  <!-- Front bubble -->
+  <path fill="#FFFFFF"
+        d="M328 380H616A96 96 0 0 1 712 476V644A96 96 0 0 1 616 740H404L312 820V736A96 96 0 0 1 232 644V476A96 96 0 0 1 328 380Z"/>
+
+  <!-- Inbox tray -->
+  <path fill="none" stroke="url(#tray)" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"
+        d="M352 568L392 488A24 24 0 0 1 413 476H531A24 24 0 0 1 552 488L592 568V618A24 24 0 0 1 568 642H376A24 24 0 0 1 352 618Z"/>
+  <path fill="none" stroke="url(#tray)" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"
+        d="M352 568H422L444 600H500L522 568H592"/>
+</svg>

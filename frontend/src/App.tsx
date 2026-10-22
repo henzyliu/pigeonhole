@@ -3,20 +3,33 @@ import {EventsOn, Go, inbox, NETWORK_LABELS} from './api';
 import ChatList from './ChatList';
 import Thread from './Thread';
 import Accounts from './Accounts';
+import NetworkIcon from './NetworkIcon';
 
 type Filter = 'all' | 'unread' | string;
+// 'inbox' holds one-to-one chats and is labelled People.
+type Category = 'inbox' | 'groups' | 'marketplace' | 'requests';
+
+const CATEGORIES: {id: Category; label: string; alwaysShown?: boolean}[] = [
+    {id: 'inbox', label: 'People', alwaysShown: true},
+    {id: 'groups', label: 'Groups', alwaysShown: true},
+    {id: 'marketplace', label: 'Market'},
+];
+// Like the Messenger app, requests aren't a tab: they open from a row under the tabs.
 
 export default function App() {
     const [chats, setChats] = useState<inbox.Chat[]>([]);
     const [accounts, setAccounts] = useState<inbox.Account[]>([]);
     const [selected, setSelected] = useState<string>('');
     const [filter, setFilter] = useState<Filter>('all');
+    const [category, setCategory] = useState<Category>('inbox');
     const [query, setQuery] = useState('');
     const [showAccounts, setShowAccounts] = useState(false);
     const [startError, setStartError] = useState('');
     const [messageTick, setMessageTick] = useState(0);
     const selectedRef = useRef(selected);
     selectedRef.current = selected;
+    const chatsRef = useRef(chats);
+    chatsRef.current = chats;
 
     const loadChats = useCallback(() => Go.Chats().then(c => setChats(c ?? [])).catch(console.error), []);
     const loadAccounts = useCallback(() => Go.Accounts().then(a => setAccounts(a ?? [])).catch(console.error), []);
@@ -40,6 +53,8 @@ export default function App() {
         const offError = EventsOn('inbox:error', (e: string) => setStartError(e));
         // Clicking a desktop notification opens that chat.
         const offOpen = EventsOn('inbox:open', (roomId: string) => {
+            const chat = chatsRef.current.find(c => c.roomId === roomId);
+            setCategory((chat?.category as Category) || 'inbox');
             setFilter('all');
             setQuery('');
             setSelected(roomId);
@@ -72,23 +87,53 @@ export default function App() {
 
     const networks = useMemo(() => Array.from(new Set(accounts.map(a => a.network))), [accounts]);
 
+    const categoryStats = useMemo(() => {
+        const stats: Record<Category, {total: number; unread: number}> = {
+            inbox: {total: 0, unread: 0}, groups: {total: 0, unread: 0},
+            marketplace: {total: 0, unread: 0}, requests: {total: 0, unread: 0},
+        };
+        for (const c of chats) {
+            const s = stats[(c.category as Category) || 'inbox'] ?? stats.inbox;
+            s.total++;
+            if (c.unread > 0) s.unread++;
+        }
+        return stats;
+    }, [chats]);
+
+    // People and Groups are always shown; the other tabs only when they have chats.
+    const tabs = CATEGORIES.filter(t => t.alwaysShown || categoryStats[t.id].total > 0);
+
+    // If a conditional tab empties (e.g. the last request was accepted), go back to People.
+    useEffect(() => {
+        const tab = CATEGORIES.find(t => t.id === category);
+        if (!tab?.alwaysShown && categoryStats[category].total === 0) setCategory('inbox');
+    }, [category, categoryStats]);
+
     const visibleChats = useMemo(() => {
         const q = query.trim().toLowerCase();
         return chats.filter(c => {
+            // Search looks across every category so nothing is hidden by the tabs.
+            if (!q && (c.category || 'inbox') !== category) return false;
             if (filter === 'unread' && c.unread === 0) return false;
             if (filter !== 'all' && filter !== 'unread' && c.network !== filter) return false;
             return !q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q);
         });
-    }, [chats, filter, query]);
+    }, [chats, category, filter, query]);
 
     const selectedChat = chats.find(c => c.roomId === selected);
-    const totalUnread = chats.reduce((n, c) => n + (c.unread > 0 ? 1 : 0), 0);
+    const totalUnread = categoryStats[category].unread;
+    const emptyText = accounts.length === 0
+        ? 'Connect an account to get started.'
+        : category === 'requests' ? 'No message requests.'
+            : category === 'marketplace' ? 'No Marketplace conversations.'
+                : category === 'groups' ? 'No group chats yet.'
+                    : 'No conversations yet. They\'ll appear as your accounts sync.';
 
     return (
         <div className="app">
             <aside className="sidebar">
                 <div className="sidebar-header">
-                    <h1>Inbox</h1>
+                    <h1>Pigeonhole</h1>
                     <button className="icon-button" title="Accounts" onClick={() => setShowAccounts(true)}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <circle cx="12" cy="8" r="4"/>
@@ -103,6 +148,31 @@ export default function App() {
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                 />
+                {!query.trim() && category !== 'requests' && (
+                    <div className="tabs" role="tablist">
+                        {tabs.map(t => (
+                            <button key={t.id} role="tab" aria-selected={category === t.id}
+                                    className={`tab ${category === t.id ? 'active' : ''}`}
+                                    onClick={() => setCategory(t.id)}>
+                                <span className="tab-label">{t.label}</span>
+                                {categoryStats[t.id].unread > 0 && <span className="tab-count">{categoryStats[t.id].unread}</span>}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {!query.trim() && categoryStats.requests.total > 0 && (
+                    category === 'requests'
+                        ? <button className="requests-row" onClick={() => setCategory('inbox')}>
+                            <span>← Back to chats</span>
+                            <span className="muted">Message requests</span>
+                        </button>
+                        : <button className="requests-row" onClick={() => setCategory('requests')}>
+                            <span>Message requests</span>
+                            <span className={categoryStats.requests.unread > 0 ? 'tab-count' : 'muted'}>
+                                {categoryStats.requests.unread || categoryStats.requests.total}
+                            </span>
+                        </button>
+                )}
                 <div className="filters">
                     <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All</FilterChip>
                     <FilterChip active={filter === 'unread'} onClick={() => setFilter('unread')}>
@@ -110,13 +180,12 @@ export default function App() {
                     </FilterChip>
                     {networks.map(n => (
                         <FilterChip key={n} active={filter === n} onClick={() => setFilter(n)}>
-                            <span className={`net-dot net-${n}`}/>{NETWORK_LABELS[n] ?? n}
+                            <NetworkIcon network={n} size={14}/>{NETWORK_LABELS[n] ?? n}
                         </FilterChip>
                     ))}
                 </div>
                 {startError && <div className="banner error">{startError}</div>}
-                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected}
-                          emptyText={accounts.length === 0 ? 'Connect an account to get started.' : 'No conversations yet. They\'ll appear as your accounts sync.'}/>
+                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}/>
             </aside>
             <main className="main">
                 {selectedChat

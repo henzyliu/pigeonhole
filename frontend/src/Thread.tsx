@@ -1,6 +1,7 @@
 import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
+import NetworkIcon from './NetworkIcon';
 
 const PAGE = 50;
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👍'];
@@ -109,7 +110,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
                 <Avatar name={chat.name} src={chat.avatar} size={36}/>
                 <div>
                     <div className="thread-title">{chat.name}</div>
-                    <div className="thread-subtitle"><span className={`net-dot net-${chat.network}`}/>{NETWORK_LABELS[chat.network] ?? chat.network}</div>
+                    <div className="thread-subtitle"><NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}</div>
                 </div>
             </header>
             <div className="messages" ref={scroller} onScroll={onScroll}>

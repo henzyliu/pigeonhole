@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,6 +26,8 @@ type LoginField struct {
 	Description string `json:"description"`
 	Default     string `json:"default"`
 	Optional    bool   `json:"optional"`
+	// Options lists the allowed values for select fields (e.g. 2FA method).
+	Options []string `json:"options"`
 }
 
 // LoginStep is the UI-facing version of bridgev2.LoginStep.
@@ -111,7 +114,9 @@ func (s *Service) SubmitLogin(sessionID string, values map[string]string) (*Logi
 	var err error
 	switch pending.step.Type {
 	case bridgev2.LoginStepTypeUserInput:
-		step, err = pending.process.(bridgev2.LoginProcessUserInput).SubmitUserInput(s.ctx, values)
+		if err = validateFields(pending.step.UserInputParams.Fields, values); err == nil {
+			step, err = pending.process.(bridgev2.LoginProcessUserInput).SubmitUserInput(s.ctx, values)
+		}
 	case bridgev2.LoginStepTypeCookies:
 		var cookies map[string]string
 		if cookies, err = ParseCookies(values["cookies"]); err == nil {
@@ -126,6 +131,32 @@ func (s *Service) SubmitLogin(sessionID string, values map[string]string) (*Logi
 		return nil, err
 	}
 	return s.advance(sessionID, pending, step), nil
+}
+
+// validateFields applies each field's own validation (which may also
+// normalize the value, e.g. strip spaces from a 2FA code), the same way the
+// bridge's login command does before submitting.
+func validateFields(fields []bridgev2.LoginInputDataField, values map[string]string) error {
+	for _, f := range fields {
+		val, ok := values[f.ID]
+		if !ok {
+			if f.Optional {
+				continue
+			}
+			return fmt.Errorf("%s is required", f.Name)
+		}
+		if len(f.Options) > 0 && !slices.Contains(f.Options, val) {
+			return fmt.Errorf("%s must be one of: %s", f.Name, strings.Join(f.Options, ", "))
+		}
+		if f.Validate != nil {
+			cleaned, err := f.Validate(val)
+			if err != nil {
+				return fmt.Errorf("%s: %w", f.Name, err)
+			}
+			values[f.ID] = cleaned
+		}
+	}
+	return nil
 }
 
 func (s *Service) CancelLogin(sessionID string) {
@@ -154,7 +185,7 @@ func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev
 		for _, f := range step.UserInputParams.Fields {
 			out.Fields = append(out.Fields, LoginField{
 				ID: f.ID, Name: f.Name, Type: string(f.Type), Description: f.Description,
-				Default: f.DefaultValue, Optional: f.Optional,
+				Default: f.DefaultValue, Optional: f.Optional, Options: f.Options,
 			})
 		}
 	case step.CookiesParams != nil:

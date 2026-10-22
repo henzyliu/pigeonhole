@@ -31,6 +31,7 @@ export namespace inbox {
 	    lastTs: number;
 	    unread: number;
 	    isDm: boolean;
+	    category: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -46,6 +47,7 @@ export namespace inbox {
 	        this.lastTs = source["lastTs"];
 	        this.unread = source["unread"];
 	        this.isDm = source["isDm"];
+	        this.category = source["category"];
 	    }
 	}
 	export class LoginField {
@@ -55,6 +57,7 @@ export namespace inbox {
 	    description: string;
 	    default: string;
 	    optional: boolean;
+	    options: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new LoginField(source);
@@ -68,6 +71,7 @@ export namespace inbox {
 	        this.description = source["description"];
 	        this.default = source["default"];
 	        this.optional = source["optional"];
+	        this.options = source["options"];
 	    }
 	}
 	export class LoginFlow {

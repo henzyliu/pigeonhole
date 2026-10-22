@@ -11,6 +11,8 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -115,5 +117,50 @@ func TestNotifications(t *testing.T) {
 	case n := <-got:
 		t.Fatalf("unexpected notification: %+v", n)
 	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+// Categories come from the bridge's own portal records: message requests and
+// Marketplace threads (which sit under a parent folder) get their own tabs,
+// the rest split into one-to-one and group chats, and the folder is hidden.
+func TestChatCategories(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	br := svc.networks["messenger"].Bridge
+	makePortal := func(key string, edit func(p *bridgev2.Portal)) id.RoomID {
+		roomID, _ := newPortal(t, svc, "messenger")
+		portal, err := br.GetPortalByKey(ctx, networkid.PortalKey{ID: networkid.PortalID(key)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		portal.MXID = roomID
+		edit(portal)
+		if err = portal.Save(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return roomID
+	}
+	makePortal("folder", func(p *bridgev2.Portal) { p.RoomType = database.RoomTypeSpace })
+	inbox := makePortal("friend", func(p *bridgev2.Portal) { p.RoomType = database.RoomTypeDM })
+	group := makePortal("book-club", func(p *bridgev2.Portal) {})
+	request := makePortal("stranger", func(p *bridgev2.Portal) { p.MessageRequest = true })
+	market := makePortal("seller", func(p *bridgev2.Portal) { p.ParentKey = networkid.PortalKey{ID: "folder"} })
+
+	chats, err := svc.Chats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[id.RoomID]string{}
+	for _, c := range chats {
+		got[id.RoomID(c.RoomID)] = c.Category
+	}
+	want := map[id.RoomID]string{inbox: CategoryInbox, group: CategoryGroups, request: CategoryRequests, market: CategoryMarketplace}
+	if len(got) != len(want) {
+		t.Fatalf("expected the folder to be hidden, got %v", got)
+	}
+	for roomID, category := range want {
+		if got[roomID] != category {
+			t.Errorf("%s: got category %q, want %q", roomID, got[roomID], category)
+		}
 	}
 }

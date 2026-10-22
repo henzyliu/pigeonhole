@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -162,15 +164,34 @@ func (a *App) React(roomID, eventID, key string) error {
 
 func (a *App) MarkRead(roomID string) error { return a.svc.MarkRead(a.ctx, roomID) }
 
-// dataDir is ~/Library/Application Support/UnifiedInbox on macOS and
-// %AppData%\UnifiedInbox on Windows.
+// dataDir is ~/Library/Application Support/Pigeonhole on macOS and
+// %AppData%\Pigeonhole on Windows.
 func dataDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(base, "UnifiedInbox")
+	dir := filepath.Join(base, "Pigeonhole")
+	if err = migrateLegacyDataDir(filepath.Join(base, "UnifiedInbox"), dir); err != nil {
+		return "", err
+	}
 	return dir, os.MkdirAll(filepath.Join(dir, "logs"), 0o700)
+}
+
+// migrateLegacyDataDir moves data from before the app was renamed from
+// "Unified Inbox" to Pigeonhole, so logins and history carry over. It only
+// runs when the new folder doesn't exist yet.
+func migrateLegacyDataDir(legacy, dir string) error {
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		return nil
+	}
+	if err := os.Rename(legacy, dir); err != nil {
+		return fmt.Errorf("failed to move data from %s to %s: %w", legacy, dir, err)
+	}
+	return nil
 }
 
 func newLogger(dir string) zerolog.Logger {

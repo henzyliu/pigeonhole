@@ -32,6 +32,12 @@ func (s *Service) onIncoming(roomID id.RoomID, sender id.UserID, ts int64, previ
 	if err != nil || mutedUntil > time.Now().UnixMilli() {
 		return
 	}
+	// Like the official apps, message requests arrive silently.
+	for netID := range s.networks {
+		if portal := s.portalFor(ctx, netID, string(roomID)); portal != nil && portal.MessageRequest {
+			return
+		}
+	}
 	var senderName string
 	_ = s.Store.DB.QueryRowContext(ctx, "SELECT name FROM profiles WHERE user_id=?", sender).Scan(&senderName)
 	n := Notification{RoomID: string(roomID), Title: name, Body: preview}
