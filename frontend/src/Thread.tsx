@@ -14,6 +14,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
     const [error, setError] = useState('');
     const [hasMore, setHasMore] = useState(true);
     const scroller = useRef<HTMLDivElement>(null);
+    const composer = useRef<HTMLTextAreaElement>(null);
     const stickToBottom = useRef(true);
     const restoreFrom = useRef<number | null>(null);
 
@@ -99,6 +100,12 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
         }
     };
 
+    // Replying jumps straight to the message box so you can start typing.
+    const startReply = (msg: inbox.Message) => {
+        setReplyTo(msg);
+        composer.current?.focus();
+    };
+
     const react = (msg: inbox.Message, key: string) =>
         Go.React(chat.roomId, msg.eventId, key).catch(e => setError(errorText(e)));
 
@@ -126,7 +133,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
                             <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm}
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
-                                        onReply={() => setReplyTo(m)} onReact={key => react(m, key)}/>
+                                        onReply={() => startReply(m)} onReact={key => react(m, key)}/>
                         </Fragment>
                     );
                 })}
@@ -147,7 +154,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
                         <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l7.9-7.9"/>
                     </svg>
                 </button>
-                <textarea rows={1} placeholder={`Message ${chat.name}`} value={draft}
+                <textarea ref={composer} rows={1} placeholder={`Message ${chat.name}`} value={draft}
                           onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>Send</button>
             </div>
@@ -172,12 +179,30 @@ function MessageRow(props: {
 }) {
     const {msg} = props;
     const [picking, setPicking] = useState(false);
+    const actionsRef = useRef<HTMLDivElement>(null);
+
+    // Once opened, the emoji bar stays until you pick one, click elsewhere or
+    // press Escape. Closing on mouse-out made it vanish while moving to it.
+    useEffect(() => {
+        if (!picking) return;
+        const onMouseDown = (e: MouseEvent) => {
+            if (!actionsRef.current?.contains(e.target as Node)) setPicking(false);
+        };
+        const onKeyDown = (e: globalThis.KeyboardEvent) => {
+            if (e.key === 'Escape') setPicking(false);
+        };
+        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', onMouseDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [picking]);
     // The toolbar is always rendered but floats beside the bubble and only
     // fades in after a short hover (see .msg-actions), so the layout never
     // shifts and quick scrolling doesn't flash it.
     return (
-        <div className={`msg-row ${msg.isMe ? 'me' : 'them'} ${props.grouped ? 'grouped' : ''} ${picking ? 'picking' : ''}`}
-             onMouseLeave={() => setPicking(false)}>
+        <div className={`msg-row ${msg.isMe ? 'me' : 'them'} ${props.grouped ? 'grouped' : ''} ${picking ? 'picking' : ''}`}>
             {!msg.isMe && <div className="msg-avatar">{!props.grouped && <Avatar name={msg.senderName} src={msg.senderAvatar} size={28}/>}</div>}
             <div className="msg-col">
                 {props.showSender && !msg.isMe && !props.grouped && <div className="msg-sender">{msg.senderName}</div>}
@@ -189,7 +214,7 @@ function MessageRow(props: {
                         <MessageBody msg={msg}/>
                     </div>
                     {!msg.redacted && (
-                        <div className="msg-actions" role="toolbar">
+                        <div className="msg-actions" role="toolbar" ref={actionsRef}>
                             <button title="React" aria-label="React" onClick={() => setPicking(p => !p)}>
                                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                                      strokeLinecap="round" strokeLinejoin="round">
@@ -205,16 +230,16 @@ function MessageRow(props: {
                                     <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
                                 </svg>
                             </button>
-                        </div>
-                    )}
-                    {picking && (
-                        <div className="reaction-picker">
-                            {QUICK_REACTIONS.map(r => (
-                                <button key={r} onClick={() => {
-                                    props.onReact(r);
-                                    setPicking(false);
-                                }}>{r}</button>
-                            ))}
+                            {picking && (
+                                <div className="reaction-picker">
+                                    {QUICK_REACTIONS.map(r => (
+                                        <button key={r} onClick={() => {
+                                            props.onReact(r);
+                                            setPicking(false);
+                                        }}>{r}</button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

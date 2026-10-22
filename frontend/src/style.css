@@ -230,19 +230,22 @@ a { color: inherit; }
     border: none; border-radius: 50%; background: transparent; color: var(--fg-muted);
 }
 .msg-actions button:hover { background: var(--bg-hover); color: var(--fg); }
+/* Anchored to the toolbar (its parent), right above the react button. */
 .reaction-picker {
-    position: absolute; bottom: calc(100% + 6px); z-index: 2;
+    position: absolute; bottom: calc(100% + 2px); z-index: 2;
     display: flex; gap: 2px; padding: 4px 6px;
     background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
-.msg-row.them .reaction-picker { left: 0; }
-.msg-row.me .reaction-picker { right: 0; }
-.reaction-picker button {
-    border: none; background: transparent; font-size: 20px; line-height: 1;
-    padding: 4px; border-radius: 50%; transition: transform 0.1s;
+/* Extend back over the message (the toolbar sits on its outer side), so the
+   bar never runs off the edge of the chat. */
+.msg-row.them .reaction-picker { right: 2px; }
+.msg-row.me .reaction-picker { left: 2px; }
+.msg-actions .reaction-picker button {
+    width: 34px; height: 34px; color: inherit;
+    font-size: 20px; line-height: 1; padding: 0; transition: transform 0.1s;
 }
-.reaction-picker button:hover { background: var(--bg-hover); transform: scale(1.15); }
+.msg-actions .reaction-picker button:hover { background: var(--bg-hover); transform: scale(1.15); }
 .reactions { display: flex; gap: 4px; margin: -4px 8px 0; position: relative; }
 .reaction {
     background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
