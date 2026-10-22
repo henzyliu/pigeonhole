@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -18,6 +21,10 @@ type App struct {
 	ctx      context.Context
 	svc      *inbox.Service
 	startErr string
+
+	viewLock   sync.Mutex
+	activeRoom string
+	focused    bool
 }
 
 func NewApp(svc *inbox.Service) *App {
@@ -27,6 +34,7 @@ func NewApp(svc *inbox.Service) *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.svc.Emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
+	a.setupNotifications()
 	go func() {
 		if err := a.svc.Start(context.Background()); err != nil {
 			a.svc.Log.Err(err).Msg("Failed to start inbox")
@@ -37,7 +45,60 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	runtime.CleanupNotifications(ctx)
 	a.svc.Stop()
+}
+
+func (a *App) setupNotifications() {
+	if err := runtime.InitializeNotifications(a.ctx); err != nil {
+		a.svc.Log.Warn().Err(err).Msg("Desktop notifications unavailable")
+		return
+	}
+	go func() {
+		if ok, err := runtime.RequestNotificationAuthorization(a.ctx); err != nil || !ok {
+			a.svc.Log.Warn().Err(err).Bool("granted", ok).Msg("Notification permission not granted")
+		}
+	}()
+	// Clicking a notification brings the window forward on that chat.
+	runtime.OnNotificationResponse(a.ctx, func(result runtime.NotificationResult) {
+		if roomID, ok := result.Response.UserInfo["roomId"].(string); ok {
+			runtime.WindowShow(a.ctx)
+			runtime.WindowUnminimise(a.ctx)
+			runtime.EventsEmit(a.ctx, "inbox:open", roomID)
+		}
+	})
+	a.svc.OnNotify = func(n inbox.Notification) {
+		a.viewLock.Lock()
+		looking := a.focused && a.activeRoom == n.RoomID
+		a.viewLock.Unlock()
+		if looking {
+			return
+		}
+		body := n.Body
+		if n.Sender != "" {
+			body = n.Sender + ": " + body
+		}
+		err := runtime.SendNotification(a.ctx, runtime.NotificationOptions{
+			ID:    n.RoomID,
+			Title: n.Title,
+			Body:  body,
+			Data:  map[string]any{"roomId": n.RoomID},
+		})
+		if err != nil {
+			a.svc.Log.Warn().Err(err).Msg("Failed to send notification")
+		}
+	}
+}
+
+// SetView tells the backend which chat is open and whether the window has
+// focus, so we don't notify about messages the user is already reading.
+func (a *App) SetView(roomID string, focused bool) {
+	a.viewLock.Lock()
+	a.activeRoom, a.focused = roomID, focused
+	a.viewLock.Unlock()
+	if focused && roomID != "" {
+		_ = runtime.RemoveDeliveredNotification(a.ctx, roomID)
+	}
 }
 
 func (a *App) StartupError() string { return a.startErr }
@@ -70,6 +131,29 @@ func (a *App) Messages(roomID string, beforeTS int64, limit int) ([]inbox.Messag
 
 func (a *App) SendText(roomID, text, replyTo string) error {
 	return a.svc.SendText(a.ctx, roomID, text, replyTo)
+}
+
+// SendFiles sends local files (from drag and drop) to a chat.
+func (a *App) SendFiles(roomID string, paths []string) error {
+	var errs []string
+	for _, path := range paths {
+		if err := a.svc.SendFile(a.ctx, roomID, path); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+// PickAndSendFiles opens the native file picker and sends the chosen files.
+func (a *App) PickAndSendFiles(roomID string) error {
+	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{Title: "Send files"})
+	if err != nil || len(paths) == 0 {
+		return err
+	}
+	return a.SendFiles(roomID, paths)
 }
 
 func (a *App) React(roomID, eventID, key string) error {

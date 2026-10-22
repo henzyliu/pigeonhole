@@ -38,12 +38,32 @@ export default function App() {
         });
         const offAccounts = EventsOn('inbox:accounts', loadAccounts);
         const offError = EventsOn('inbox:error', (e: string) => setStartError(e));
+        // Clicking a desktop notification opens that chat.
+        const offOpen = EventsOn('inbox:open', (roomId: string) => {
+            setFilter('all');
+            setQuery('');
+            setSelected(roomId);
+        });
         return () => {
             offChange();
             offAccounts();
             offError();
+            offOpen();
         };
     }, [loadChats, loadAccounts]);
+
+    // Keep the backend informed so it can skip notifications for the chat
+    // you're already reading.
+    useEffect(() => {
+        const report = () => Go.SetView(selectedRef.current, document.hasFocus());
+        report();
+        window.addEventListener('focus', report);
+        window.addEventListener('blur', report);
+        return () => {
+            window.removeEventListener('focus', report);
+            window.removeEventListener('blur', report);
+        };
+    }, [selected]);
 
     useEffect(() => {
         if (accounts.length === 0 && chats.length === 0) return;

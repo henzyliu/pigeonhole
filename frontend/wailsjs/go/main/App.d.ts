@@ -18,9 +18,15 @@ export function Messages(arg1:string,arg2:number,arg3:number):Promise<Array<inbo
 
 export function Networks():Promise<Array<inbox.LoginFlow>>;
 
+export function PickAndSendFiles(arg1:string):Promise<void>;
+
 export function React(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SendFiles(arg1:string,arg2:Array<string>):Promise<void>;
+
 export function SendText(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SetView(arg1:string,arg2:boolean):Promise<void>;
 
 export function StartLogin(arg1:string,arg2:string):Promise<inbox.LoginStep>;
 

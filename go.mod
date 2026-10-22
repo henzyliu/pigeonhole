@@ -8,6 +8,7 @@ require (
 	github.com/wailsapp/wails/v2 v2.17.0
 	go.mau.fi/mautrix-meta v0.2610.0
 	go.mau.fi/util v0.11.0
+	golang.org/x/image v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mautrix v0.32.0
 )
@@ -75,7 +76,6 @@ require (
 	go.mau.fi/zeroconfig v0.2.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
-	golang.org/x/image v0.47.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

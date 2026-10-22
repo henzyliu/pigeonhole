@@ -34,12 +34,24 @@ export function Networks() {
   return window['go']['main']['App']['Networks']();
 }
 
+export function PickAndSendFiles(arg1) {
+  return window['go']['main']['App']['PickAndSendFiles'](arg1);
+}
+
 export function React(arg1, arg2, arg3) {
   return window['go']['main']['App']['React'](arg1, arg2, arg3);
 }
 
+export function SendFiles(arg1, arg2) {
+  return window['go']['main']['App']['SendFiles'](arg1, arg2);
+}
+
 export function SendText(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendText'](arg1, arg2, arg3);
+}
+
+export function SetView(arg1, arg2) {
+  return window['go']['main']['App']['SetView'](arg1, arg2);
 }
 
 export function StartLogin(arg1, arg2) {

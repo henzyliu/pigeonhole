@@ -1,5 +1,5 @@
 import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
-import {errorText, Go, inbox, NETWORK_LABELS} from './api';
+import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
 
 const PAGE = 50;
@@ -31,6 +31,23 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
         refresh().catch(e => setError(errorText(e)));
         Go.MarkRead(chat.roomId).catch(console.error);
     }, [refresh, props.tick, chat.roomId]);
+
+    // Files dropped anywhere on the window go to the open conversation.
+    useEffect(() => {
+        OnFileDrop((_x, _y, paths) => {
+            if (!paths?.length) return;
+            setError('');
+            stickToBottom.current = true;
+            Go.SendFiles(chat.roomId, paths).catch(e => setError(errorText(e)));
+        }, false);
+        return () => OnFileDropOff();
+    }, [chat.roomId]);
+
+    const attach = () => {
+        setError('');
+        stickToBottom.current = true;
+        Go.PickAndSendFiles(chat.roomId).catch(e => setError(errorText(e)));
+    };
 
     useLayoutEffect(() => {
         const el = scroller.current;
@@ -121,6 +138,11 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
                 </div>
             )}
             <div className="composer">
+                <button className="icon-button attach" title="Send photos or files" onClick={attach}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l7.9-7.9"/>
+                    </svg>
+                </button>
                 <textarea rows={1} placeholder={`Message ${chat.name}`} value={draft}
                           onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>Send</button>

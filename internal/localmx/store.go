@@ -89,6 +89,9 @@ type Store struct {
 	// own ghost on a network). Set by the inbox service.
 	IsSelf func(id.UserID) bool
 	Notify func(Change)
+	// OnIncoming is called for each new message from someone else that counts
+	// towards the unread total (i.e. not history backfill).
+	OnIncoming func(roomID id.RoomID, sender id.UserID, ts int64, preview string)
 
 	lock sync.Mutex
 }
@@ -263,10 +266,14 @@ func (s *Store) insertMessage(ctx context.Context, evt *event.Event, msg *event.
 			last_ts=MAX(last_ts, ?),
 			unread=unread + ?
 		WHERE room_id=?`, evt.Timestamp, Preview(evt.Type, msg), evt.Timestamp, unread, evt.RoomID)
-	if err == nil {
-		s.notify("rooms", evt.RoomID)
+	if err != nil {
+		return err
 	}
-	return err
+	s.notify("rooms", evt.RoomID)
+	if unread > 0 && s.OnIncoming != nil {
+		go s.OnIncoming(evt.RoomID, evt.Sender, evt.Timestamp, Preview(evt.Type, msg))
+	}
+	return nil
 }
 
 // Preview renders a one-line summary of a message for the chat list.

@@ -39,6 +39,8 @@ type Service struct {
 	Log   zerolog.Logger
 	// Emit pushes an event to the UI.
 	Emit func(name string, data any)
+	// OnNotify is called when a new message should raise a desktop alert.
+	OnNotify func(Notification)
 
 	ctx      context.Context
 	networks map[string]*Network
@@ -63,6 +65,7 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 	}
 	store.IsSelf = s.isSelf
 	store.Notify = func(change localmx.Change) { s.emit("inbox:change", change) }
+	store.OnIncoming = s.onIncoming
 
 	fb := &connector.MetaConnector{}
 	if err = loadConfig(connector.ExampleConfig, &fb.Config); err != nil {
