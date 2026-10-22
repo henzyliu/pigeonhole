@@ -167,10 +167,13 @@ function MessageRow(props: {
     onReact: (key: string) => void;
 }) {
     const {msg} = props;
-    const [hover, setHover] = useState(false);
+    const [picking, setPicking] = useState(false);
+    // The toolbar is always rendered but floats beside the bubble and only
+    // fades in after a short hover (see .msg-actions), so the layout never
+    // shifts and quick scrolling doesn't flash it.
     return (
-        <div className={`msg-row ${msg.isMe ? 'me' : 'them'} ${props.grouped ? 'grouped' : ''}`}
-             onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        <div className={`msg-row ${msg.isMe ? 'me' : 'them'} ${props.grouped ? 'grouped' : ''} ${picking ? 'picking' : ''}`}
+             onMouseLeave={() => setPicking(false)}>
             {!msg.isMe && <div className="msg-avatar">{!props.grouped && <Avatar name={msg.senderName} src={msg.senderAvatar} size={28}/>}</div>}
             <div className="msg-col">
                 {props.showSender && !msg.isMe && !props.grouped && <div className="msg-sender">{msg.senderName}</div>}
@@ -181,10 +184,33 @@ function MessageRow(props: {
                     <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''}`} title={new Date(msg.ts).toLocaleString()}>
                         <MessageBody msg={msg}/>
                     </div>
-                    {hover && !msg.redacted && (
-                        <div className="msg-actions">
-                            {QUICK_REACTIONS.map(r => <button key={r} onClick={() => props.onReact(r)}>{r}</button>)}
-                            <button onClick={props.onReply} title="Reply">↩</button>
+                    {!msg.redacted && (
+                        <div className="msg-actions" role="toolbar">
+                            <button title="React" aria-label="React" onClick={() => setPicking(p => !p)}>
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                     strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="9"/>
+                                    <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/>
+                                    <path d="M9 9.5h.01M15 9.5h.01"/>
+                                </svg>
+                            </button>
+                            <button title="Reply" aria-label="Reply" onClick={props.onReply}>
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                     strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 14 4 9l5-5"/>
+                                    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+                                </svg>
+                            </button>
+                        </div>
+                    )}
+                    {picking && (
+                        <div className="reaction-picker">
+                            {QUICK_REACTIONS.map(r => (
+                                <button key={r} onClick={() => {
+                                    props.onReact(r);
+                                    setPicking(false);
+                                }}>{r}</button>
+                            ))}
                         </div>
                     )}
                 </div>
