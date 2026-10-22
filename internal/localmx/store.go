@@ -116,6 +116,9 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 	if _, err = db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
 	}
+	if err = relativizeMediaPaths(db); err != nil {
+		return nil, fmt.Errorf("failed to fix media paths: %w", err)
+	}
 	return &Store{DB: db, MediaDir: mediaDir, Me: me}, nil
 }
 
@@ -383,14 +386,42 @@ func (s *Store) GetEvent(ctx context.Context, eventID id.EventID) (*event.Event,
 	return evt, nil
 }
 
+// SaveMedia records a file in MediaDir. Only the file name is stored, so the
+// data folder can be moved (as when the app was renamed) without breaking it.
 func (s *Store) SaveMedia(ctx context.Context, mxc id.ContentURIString, path, mime string) error {
 	_, err := s.DB.ExecContext(ctx, `
 		INSERT INTO media (mxc, path, mime) VALUES (?, ?, ?)
-		ON CONFLICT (mxc) DO UPDATE SET path=excluded.path, mime=excluded.mime`, mxc, path, mime)
+		ON CONFLICT (mxc) DO UPDATE SET path=excluded.path, mime=excluded.mime`, mxc, filepath.Base(path), mime)
 	return err
 }
 
 func (s *Store) MediaPath(ctx context.Context, mxc id.ContentURIString) (path, mime string, err error) {
-	err = s.DB.QueryRowContext(ctx, "SELECT path, mime FROM media WHERE mxc=?", mxc).Scan(&path, &mime)
-	return
+	var name string
+	err = s.DB.QueryRowContext(ctx, "SELECT path, mime FROM media WHERE mxc=?", mxc).Scan(&name, &mime)
+	return filepath.Join(s.MediaDir, filepath.Base(name)), mime, err
+}
+
+// relativizeMediaPaths rewrites media rows saved with absolute paths (before
+// paths were stored relative) to bare file names.
+func relativizeMediaPaths(db *sql.DB) error {
+	rows, err := db.Query("SELECT mxc, path FROM media WHERE path LIKE '%/%' OR path LIKE '%\\%'")
+	if err != nil {
+		return err
+	}
+	fixes := map[string]string{}
+	for rows.Next() {
+		var mxc, path string
+		if err = rows.Scan(&mxc, &path); err != nil {
+			rows.Close()
+			return err
+		}
+		fixes[mxc] = filepath.Base(path)
+	}
+	rows.Close()
+	for mxc, name := range fixes {
+		if _, err = db.Exec("UPDATE media SET path=? WHERE mxc=?", name, mxc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
