@@ -103,6 +103,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
         Go.React(chat.roomId, msg.eventId, key).catch(e => setError(errorText(e)));
 
     const byId = new Map(messages.map(m => [m.eventId, m]));
+    // Sent / Delivered only shows under your newest message, like Messenger.
+    const latestMine = [...messages].reverse().find(m => m.isMe && !m.redacted)?.eventId;
 
     return (
         <section className="thread">
@@ -122,6 +124,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
                         <Fragment key={m.eventId}>
                             {newDay && <div className="day-divider">{new Date(m.ts).toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'})}</div>}
                             <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm}
+                                        isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => setReplyTo(m)} onReact={key => react(m, key)}/>
                         </Fragment>
@@ -162,6 +165,7 @@ function MessageRow(props: {
     msg: inbox.Message;
     grouped: boolean;
     showSender: boolean;
+    isLatestMine: boolean;
     replied?: inbox.Message;
     onReply: () => void;
     onReact: (key: string) => void;
@@ -221,10 +225,46 @@ function MessageRow(props: {
                         ))}
                     </div>
                 )}
-                {msg.isMe && (msg.status === 'pending' || msg.status === 'fail' || msg.status === 'retriable') && (
-                    <div className={`msg-status ${msg.status}`}>{msg.status === 'pending' ? 'Sending…' : 'Failed to send'}</div>
-                )}
+                <MessageStatus msg={msg} isDm={!props.showSender} isLatestMine={props.isLatestMine}/>
             </div>
+        </div>
+    );
+}
+
+const MAX_SEEN_AVATARS = 5;
+
+// What shows under a message, in priority order: a send problem, who has seen
+// it, then (on your newest message only) Sent / Delivered.
+function MessageStatus(props: {msg: inbox.Message; isDm: boolean; isLatestMine: boolean}) {
+    const {msg} = props;
+    if (msg.isMe && (msg.status === 'pending' || msg.status === 'fail' || msg.status === 'retriable')) {
+        return <div className={`msg-status ${msg.status}`}>{msg.status === 'pending' ? 'Sending…' : 'Failed to send'}</div>;
+    }
+    if (msg.seenBy?.length) {
+        return <SeenBy readers={msg.seenBy} isDm={props.isDm} isMe={msg.isMe}/>;
+    }
+    if (props.isLatestMine && msg.status === 'delivered') {
+        return <div className="msg-status">Delivered</div>;
+    }
+    if (props.isLatestMine && msg.status === 'success') {
+        return <div className="msg-status">Sent</div>;
+    }
+    return null;
+}
+
+// Messenger-style read receipts: "Seen" under your message in a one-to-one
+// chat, and small avatars of who has read this far in a group.
+function SeenBy(props: {readers: inbox.Reader[]; isDm: boolean; isMe: boolean}) {
+    const {readers} = props;
+    if (readers.length === 0) return null;
+    if (props.isDm) {
+        return props.isMe ? <div className="msg-status seen">Seen</div> : null;
+    }
+    const names = readers.map(r => r.name).join(', ');
+    return (
+        <div className="seen-by" title={`Seen by ${names}`}>
+            {readers.slice(0, MAX_SEEN_AVATARS).map((r, i) => <Avatar key={i} name={r.name} src={r.avatar} size={16}/>)}
+            {readers.length > MAX_SEEN_AVATARS && <span className="seen-more">+{readers.length - MAX_SEEN_AVATARS}</span>}
         </div>
     );
 }

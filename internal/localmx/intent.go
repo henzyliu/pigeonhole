@@ -52,11 +52,14 @@ func (in *Intent) SendState(ctx context.Context, roomID id.RoomID, eventType eve
 	return &mautrix.RespSendEvent{EventID: newEventID()}, nil
 }
 
+// MarkRead is called when someone reads a chat: the local user (via their
+// double puppet, e.g. after reading on their phone) clears the unread count;
+// anyone else becomes a "Seen" receipt.
 func (in *Intent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) error {
-	if in.mxid != in.c.Store.Me {
-		return nil
+	if in.c.Store.isSelf(in.mxid) {
+		return in.c.Store.MarkRead(ctx, roomID)
 	}
-	return in.c.Store.MarkRead(ctx, roomID)
+	return in.c.Store.SetReceipt(ctx, roomID, in.mxid, eventID, ts)
 }
 
 func (in *Intent) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error {

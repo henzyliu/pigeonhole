@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS reactions (
 	key      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reactions_target ON reactions (target);
+-- Where each other person has read up to in a room (one row per reader).
+CREATE TABLE IF NOT EXISTS receipts (
+	room_id  TEXT NOT NULL,
+	user_id  TEXT NOT NULL,
+	event_id TEXT NOT NULL,
+	ts       INTEGER NOT NULL,
+	PRIMARY KEY (room_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS media (
 	mxc  TEXT PRIMARY KEY,
 	path TEXT NOT NULL,
@@ -298,8 +306,20 @@ func Preview(evtType event.Type, msg *event.MessageEventContent) string {
 	return body
 }
 
+// Message statuses, as stored in events.status. "pending", "fail" and
+// "retriable" come straight from the bridge's message status too.
+const (
+	StatusSuccess   = "success"
+	StatusDelivered = "delivered"
+)
+
+// SetEventStatus records a send status. A late "success" never downgrades a
+// message that's already been delivered.
 func (s *Store) SetEventStatus(ctx context.Context, eventID id.EventID, roomID id.RoomID, status string) {
-	if _, err := s.DB.ExecContext(ctx, "UPDATE events SET status=? WHERE event_id=?", status, eventID); err == nil {
+	_, err := s.DB.ExecContext(ctx, `
+		UPDATE events SET status=? WHERE event_id=? AND NOT (status=? AND ?=?)`,
+		status, eventID, StatusDelivered, status, StatusSuccess)
+	if err == nil {
 		s.notify("messages", roomID)
 	}
 }
@@ -308,6 +328,18 @@ func (s *Store) MarkRead(ctx context.Context, roomID id.RoomID) error {
 	_, err := s.DB.ExecContext(ctx, "UPDATE rooms SET unread=0 WHERE room_id=?", roomID)
 	if err == nil {
 		s.notify("rooms", roomID)
+	}
+	return err
+}
+
+// SetReceipt records that another person has read up to eventID.
+func (s *Store) SetReceipt(ctx context.Context, roomID id.RoomID, userID id.UserID, eventID id.EventID, ts time.Time) error {
+	_, err := s.DB.ExecContext(ctx, `
+		INSERT INTO receipts (room_id, user_id, event_id, ts) VALUES (?, ?, ?, ?)
+		ON CONFLICT (room_id, user_id) DO UPDATE SET event_id=excluded.event_id, ts=excluded.ts`,
+		roomID, userID, eventID, ts.UnixMilli())
+	if err == nil {
+		s.notify("messages", roomID)
 	}
 	return err
 }

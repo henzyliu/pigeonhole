@@ -138,6 +138,20 @@ export namespace inbox {
 		    return a;
 		}
 	}
+	export class Reader {
+	    name: string;
+	    avatar: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Reader(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
+	    }
+	}
 	export class Reaction {
 	    key: string;
 	    count: number;
@@ -172,6 +186,7 @@ export namespace inbox {
 	    redacted: boolean;
 	    replyTo: string;
 	    reactions: Reaction[];
+	    seenBy: Reader[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -196,6 +211,7 @@ export namespace inbox {
 	        this.redacted = source["redacted"];
 	        this.replyTo = source["replyTo"];
 	        this.reactions = this.convertValues(source["reactions"], Reaction);
+	        this.seenBy = this.convertValues(source["seenBy"], Reader);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -240,6 +256,7 @@ export namespace inbox {
 	        this.roomId = source["roomId"];
 	    }
 	}
+	
 
 }
 

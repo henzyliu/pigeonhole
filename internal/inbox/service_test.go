@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
@@ -160,5 +161,122 @@ func TestValidateFields(t *testing.T) {
 	}
 	if values["code"] != "123456" {
 		t.Fatalf("expected Validate to normalize the code, got %q", values["code"])
+	}
+}
+
+// Other people's read receipts show up as "seen by" on the newest message at
+// or before where they've read to, and move forward as they read more.
+func TestSeenReceipts(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	mx := svc.networks["messenger"].MX
+	friend := mx.GhostIntent("friend")
+	if err := friend.SetDisplayName(ctx, "Friend"); err != nil {
+		t.Fatal(err)
+	}
+	stateKey := ""
+	roomID, err := mx.BotIntent().CreateRoom(ctx, &mautrix.ReqCreateRoom{
+		IsDirect: true,
+		Invite:   []id.UserID{friend.GetMXID(), Me},
+		InitialState: []*event.Event{{
+			Type: event.StateBridge, StateKey: &stateKey,
+			Content: event.Content{Parsed: &event.BridgeEventContent{}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	me, _, _ := mx.NewUserIntent(ctx, Me, "")
+	send := func(intent bridgev2.MatrixAPI, body string, ts time.Time) id.EventID {
+		resp, err := intent.SendMessage(ctx, roomID, event.EventMessage, &event.Content{
+			Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: body},
+		}, &bridgev2.MatrixSendExtra{Timestamp: ts})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.EventID
+	}
+	base := time.Now().Add(-time.Hour)
+	first := send(me, "hi", base)
+	send(me, "you there?", base.Add(time.Minute))
+	second := send(friend, "yep", base.Add(2*time.Minute))
+
+	seenOn := func() map[string][]string {
+		msgs, err := svc.Messages(ctx, string(roomID), 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string][]string{}
+		for _, m := range msgs {
+			for _, r := range m.SeenBy {
+				out[m.Body] = append(out[m.Body], r.Name)
+			}
+		}
+		return out
+	}
+	// Read up to the first message only.
+	if err = friend.MarkRead(ctx, roomID, first, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenOn(); len(got) != 1 || len(got["hi"]) != 1 || got["hi"][0] != "Friend" {
+		t.Fatalf("expected Friend to have seen 'hi', got %v", got)
+	}
+	// Once their read position is their own reply, nothing is shown: the reply
+	// already makes it obvious they've seen what came before (as in Messenger).
+	if err = friend.MarkRead(ctx, roomID, second, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenOn(); len(got) != 0 {
+		t.Fatalf("reader shouldn't be shown on their own message, got %v", got)
+	}
+	// The local user's own receipts clear unread instead of adding a reader.
+	if err = me.MarkRead(ctx, roomID, second, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if chats, _ := svc.Chats(ctx); chats[0].Unread != 0 {
+		t.Fatalf("expected chat to be read, got %+v", chats[0])
+	}
+}
+
+// Delivery receipts upgrade a sent message to "delivered", and a late plain
+// success doesn't downgrade it again.
+func TestDeliveryStatus(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, _ := newPortal(t, svc, "messenger")
+	mx := svc.networks["messenger"].MX
+	// Stored directly rather than via SendText, which would also hand the
+	// message to the (login-less) bridge and race its failure status.
+	me, _, _ := mx.NewUserIntent(ctx, Me, "")
+	sent, err := me.SendMessage(ctx, roomID, event.EventMessage, &event.Content{
+		Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "hello"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.Store.SetEventStatus(ctx, sent.EventID, roomID, "pending")
+	status := func() (string, string) {
+		msgs, err := svc.Messages(ctx, string(roomID), 0, 10)
+		if err != nil || len(msgs) != 1 {
+			t.Fatalf("expected one message, got %v, %v", msgs, err)
+		}
+		return msgs[0].EventID, msgs[0].Status
+	}
+	eventID, st := status()
+	if st != "pending" {
+		t.Fatalf("expected pending, got %q", st)
+	}
+	info := &bridgev2.MessageStatusEventInfo{RoomID: roomID, SourceEventID: id.EventID(eventID)}
+	mx.SendMessageStatus(ctx, &bridgev2.MessageStatus{Status: event.MessageStatusSuccess}, info)
+	if _, st = status(); st != "success" {
+		t.Fatalf("expected success, got %q", st)
+	}
+	mx.SendMessageStatus(ctx, &bridgev2.MessageStatus{Status: event.MessageStatusSuccess, DeliveredTo: []id.UserID{"@x:local"}}, info)
+	if _, st = status(); st != "delivered" {
+		t.Fatalf("expected delivered, got %q", st)
+	}
+	mx.SendMessageStatus(ctx, &bridgev2.MessageStatus{Status: event.MessageStatusSuccess}, info)
+	if _, st = status(); st != "delivered" {
+		t.Fatalf("a late success shouldn't downgrade delivered, got %q", st)
 	}
 }

@@ -102,7 +102,13 @@ func (c *Connector) SendMessageStatus(ctx context.Context, st *bridgev2.MessageS
 	if evt == nil || evt.SourceEventID == "" {
 		return
 	}
-	c.Store.SetEventStatus(ctx, evt.SourceEventID, evt.RoomID, strings.ToLower(string(st.Status)))
+	status := strings.ToLower(string(st.Status))
+	// The bridge reports a delivery receipt as another "success" status, with
+	// the recipient listed in DeliveredTo.
+	if st.Status == event.MessageStatusSuccess && len(st.DeliveredTo) > 0 {
+		status = StatusDelivered
+	}
+	c.Store.SetEventStatus(ctx, evt.SourceEventID, evt.RoomID, status)
 }
 
 func (c *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error) {

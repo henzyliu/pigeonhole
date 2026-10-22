@@ -56,6 +56,15 @@ type Message struct {
 	Redacted     bool       `json:"redacted"`
 	ReplyTo      string     `json:"replyTo"`
 	Reactions    []Reaction `json:"reactions"`
+	// SeenBy lists the people whose read position is this message.
+	SeenBy []Reader `json:"seenBy"`
+
+	senderID id.UserID
+}
+
+type Reader struct {
+	Name   string `json:"name"`
+	Avatar string `json:"avatar"`
 }
 
 type profile struct{ name, avatar string }
@@ -242,6 +251,7 @@ func (s *Service) Messages(ctx context.Context, roomID string, beforeTS int64, l
 			return nil, err
 		}
 		senderID := id.UserID(sender)
+		m.senderID = senderID
 		m.IsMe = senderID == Me || s.isSelf(senderID)
 		p := profiles[senderID]
 		m.SenderName, m.SenderAvatar = p.name, MediaURL(p.avatar)
@@ -255,6 +265,9 @@ func (s *Service) Messages(ctx context.Context, roomID string, beforeTS int64, l
 		return nil, err
 	}
 	if err = s.attachReactions(ctx, roomID, msgs, index); err != nil {
+		return nil, err
+	}
+	if err = s.attachReceipts(ctx, roomID, msgs, profiles); err != nil {
 		return nil, err
 	}
 	// Oldest first, which is how the thread view renders.
@@ -324,6 +337,45 @@ func (s *Service) attachReactions(ctx context.Context, roomID string, msgs []Mes
 		}
 		if !found {
 			msgs[i].Reactions = append(msgs[i].Reactions, Reaction{Key: key, Count: 1, Mine: mine})
+		}
+	}
+	return rows.Err()
+}
+
+// attachReceipts marks each other person's read position on the newest
+// message at or before it, like Messenger's "Seen" and reader avatars. msgs
+// is newest first. A reader isn't shown on their own message.
+func (s *Service) attachReceipts(ctx context.Context, roomID string, msgs []Message, profiles map[id.UserID]profile) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	rows, err := s.Store.DB.QueryContext(ctx, `
+		SELECT r.user_id, COALESCE(e.ts, -1)
+		FROM receipts r LEFT JOIN events e ON e.event_id = r.event_id
+		WHERE r.room_id=?`, roomID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID string
+		var readTS int64
+		if err = rows.Scan(&userID, &readTS); err != nil {
+			return err
+		}
+		reader := id.UserID(userID)
+		if readTS < 0 || reader == Me || s.isSelf(reader) {
+			continue
+		}
+		for i := range msgs {
+			if msgs[i].TS > readTS {
+				continue
+			}
+			if msgs[i].senderID != reader {
+				p := profiles[reader]
+				msgs[i].SeenBy = append(msgs[i].SeenBy, Reader{Name: p.name, Avatar: MediaURL(p.avatar)})
+			}
+			break
 		}
 	}
 	return rows.Err()
