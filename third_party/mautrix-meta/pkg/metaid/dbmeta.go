@@ -54,6 +54,10 @@ type UserLoginMetadata struct {
 
 	// Thread backfill state
 	BackfillCompleted bool `json:"backfill_completed,omitempty"`
+	// E2EEThreadBackfillCompleted tracks paging through the end-to-end
+	// encrypted thread list (sync group 95) separately, so logins that already
+	// finished the regular list still fetch their remaining encrypted chats.
+	E2EEThreadBackfillCompleted bool `json:"e2ee_thread_backfill_completed,omitempty"`
 }
 
 func (m *UserLoginMetadata) CopyFrom(other any) {
