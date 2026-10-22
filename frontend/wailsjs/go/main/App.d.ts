@@ -18,9 +18,13 @@ export function Messages(arg1:string,arg2:number,arg3:number):Promise<Array<inbo
 
 export function Networks():Promise<Array<inbox.LoginFlow>>;
 
+export function OpenChat(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function PickAndSendFiles(arg1:string):Promise<void>;
 
 export function React(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SearchPeople(arg1:string):Promise<Array<inbox.Person>>;
 
 export function SendFiles(arg1:string,arg2:Array<string>):Promise<void>;
 

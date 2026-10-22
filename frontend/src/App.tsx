@@ -3,6 +3,7 @@ import {EventsOn, Go, inbox, NETWORK_LABELS} from './api';
 import ChatList from './ChatList';
 import Thread from './Thread';
 import Accounts from './Accounts';
+import NewChat from './NewChat';
 import NetworkIcon from './NetworkIcon';
 
 type Filter = 'all' | 'unread' | string;
@@ -24,6 +25,7 @@ export default function App() {
     const [category, setCategory] = useState<Category>('inbox');
     const [query, setQuery] = useState('');
     const [showAccounts, setShowAccounts] = useState(false);
+    const [showNewChat, setShowNewChat] = useState(false);
     const [startError, setStartError] = useState('');
     const [messageTick, setMessageTick] = useState(0);
     const selectedRef = useRef(selected);
@@ -32,6 +34,24 @@ export default function App() {
     chatsRef.current = chats;
 
     const loadChats = useCallback(() => Go.Chats().then(c => setChats(c ?? [])).catch(console.error), []);
+
+    // Selects a chat and switches to the tab and filters that show it.
+    const showChat = useCallback((roomId: string, list: inbox.Chat[]) => {
+        const chat = list.find(c => c.roomId === roomId);
+        setCategory((chat?.category as Category) || 'inbox');
+        setFilter('all');
+        setQuery('');
+        setSelected(roomId);
+    }, []);
+
+    // A chat opened from New chat may have only just been created, so fetch
+    // the list fresh before working out which tab it's in.
+    const openNewChat = useCallback(async (roomId: string) => {
+        setShowNewChat(false);
+        const list = await Go.Chats().catch(() => null) ?? chatsRef.current;
+        setChats(list);
+        showChat(roomId, list);
+    }, [showChat]);
     const loadAccounts = useCallback(() => Go.Accounts().then(a => setAccounts(a ?? [])).catch(console.error), []);
 
     useEffect(() => {
@@ -52,20 +72,14 @@ export default function App() {
         const offAccounts = EventsOn('inbox:accounts', loadAccounts);
         const offError = EventsOn('inbox:error', (e: string) => setStartError(e));
         // Clicking a desktop notification opens that chat.
-        const offOpen = EventsOn('inbox:open', (roomId: string) => {
-            const chat = chatsRef.current.find(c => c.roomId === roomId);
-            setCategory((chat?.category as Category) || 'inbox');
-            setFilter('all');
-            setQuery('');
-            setSelected(roomId);
-        });
+        const offOpen = EventsOn('inbox:open', (roomId: string) => showChat(roomId, chatsRef.current));
         return () => {
             offChange();
             offAccounts();
             offError();
             offOpen();
         };
-    }, [loadChats, loadAccounts]);
+    }, [loadChats, loadAccounts, showChat]);
 
     // Keep the backend informed so it can skip notifications for the chat
     // you're already reading.
@@ -134,13 +148,23 @@ export default function App() {
             <aside className="sidebar">
                 <div className="sidebar-header">
                     <h1>Pigeonhole</h1>
-                    <button className="icon-button" title="Accounts" onClick={() => setShowAccounts(true)}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="8" r="4"/>
-                            <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
-                        </svg>
-                        {accounts.some(a => a.state !== 'connected' && a.state !== 'connecting') && <span className="dot-alert"/>}
-                    </button>
+                    <div className="header-actions">
+                        <button className="icon-button" title="New chat" disabled={accounts.length === 0}
+                                onClick={() => setShowNewChat(true)}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                 strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9"/>
+                                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                            </svg>
+                        </button>
+                        <button className="icon-button" title="Accounts" onClick={() => setShowAccounts(true)}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+                            </svg>
+                            {accounts.some(a => a.state !== 'connected' && a.state !== 'connecting') && <span className="dot-alert"/>}
+                        </button>
+                    </div>
                 </div>
                 <input
                     className="search"
@@ -197,6 +221,7 @@ export default function App() {
                     </div>}
             </main>
             {showAccounts && <Accounts accounts={accounts} onClose={() => setShowAccounts(false)}/>}
+            {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
         </div>
     );
 }

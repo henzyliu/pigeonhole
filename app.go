@@ -164,6 +164,14 @@ func (a *App) React(roomID, eventID, key string) error {
 
 func (a *App) MarkRead(roomID string) error { return a.svc.MarkRead(a.ctx, roomID) }
 
+func (a *App) SearchPeople(query string) ([]inbox.Person, error) {
+	return a.svc.SearchPeople(a.ctx, query)
+}
+
+func (a *App) OpenChat(network, loginID, userID string) (string, error) {
+	return a.svc.OpenChat(a.ctx, network, loginID, userID)
+}
+
 // dataDir is ~/Library/Application Support/Pigeonhole on macOS and
 // %AppData%\Pigeonhole on Windows.
 func dataDir() (string, error) {

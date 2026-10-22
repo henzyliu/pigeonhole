@@ -164,3 +164,33 @@ func TestChatCategories(t *testing.T) {
 		}
 	}
 }
+
+// Opening someone you already have a chat with must not call Meta (which
+// would bump the chat on other devices); it just returns the existing room.
+func TestOpenChatReusesExistingDM(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	br := svc.networks["messenger"].Bridge
+	roomID, _ := newPortal(t, svc, "messenger")
+	portal, err := br.GetPortalByKey(ctx, networkid.PortalKey{ID: "dm-with-friend"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	portal.MXID = roomID
+	portal.RoomType = database.RoomTypeDM
+	portal.OtherUserID = "friend-id"
+	if err = portal.Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// No login exists in the test, so reaching Meta would fail.
+	got, err := svc.OpenChat(ctx, "messenger", "no-such-login", "friend-id")
+	if err != nil || got != string(roomID) {
+		t.Fatalf("OpenChat = %q, %v; want %q", got, err, roomID)
+	}
+	if _, err = svc.OpenChat(ctx, "messenger", "no-such-login", "stranger-id"); err == nil {
+		t.Fatal("expected opening a new chat without a login to fail")
+	}
+	if people, err := svc.SearchPeople(ctx, "a"); err != nil || people != nil {
+		t.Fatalf("one-letter search should be a no-op, got %v, %v", people, err)
+	}
+}

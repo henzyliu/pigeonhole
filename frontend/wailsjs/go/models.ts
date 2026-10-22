@@ -216,6 +216,30 @@ export namespace inbox {
 		    return a;
 		}
 	}
+	export class Person {
+	    network: string;
+	    networkName: string;
+	    loginId: string;
+	    id: string;
+	    name: string;
+	    avatar: string;
+	    roomId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Person(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.network = source["network"];
+	        this.networkName = source["networkName"];
+	        this.loginId = source["loginId"];
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
+	        this.roomId = source["roomId"];
+	    }
+	}
 
 }
 
