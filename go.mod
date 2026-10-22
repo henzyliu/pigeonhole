@@ -87,3 +87,5 @@ require (
 // replace github.com/wailsapp/wails/v2 v2.17.0 => /Users/henryliu/go/pkg/mod
 
 replace github.com/imroc/req/v3 => github.com/beeper/req/v3 v3.0.0-20260925135712-b49593750e56
+
+replace go.mau.fi/mautrix-meta => ./third_party/mautrix-meta
