@@ -81,6 +81,11 @@ is easiest to build on itself. The GitHub Actions workflow in
   Password login from a new "device" can push Meta into account-recovery checks.
 - Messenger chats that *started* end-to-end encrypted aren't in any thread list
   the bridge can read; they appear once a new message arrives in them.
-- The app icon's source is `build/icon/appicon.svg`; `build/appicon.png` (macOS)
-  and `build/windows/icon.ico` are generated from it.
+- The app icon's source is `build/icon/appicon.svg` (a pigeon in a cabinet of
+  mail-sorting cubbies). `build/appicon.png` (macOS) and `build/windows/icon.ico`
+  are generated from it with:
+
+  ```bash
+  go run -C build/icon/gen . -svg ../appicon.svg -out ../..
+  ```
 - mautrix-meta is AGPL-3.0, so this app is too if you distribute it.
