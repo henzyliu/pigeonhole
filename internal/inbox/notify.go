@@ -20,7 +20,10 @@ type Notification struct {
 const maxNotifyAge = 2 * time.Minute
 
 func (s *Service) onIncoming(roomID id.RoomID, sender id.UserID, ts int64, preview string) {
-	if s.OnNotify == nil || time.Since(time.UnixMilli(ts)) > maxNotifyAge {
+	if s.OnNotify == nil {
+		return
+	} else if time.Since(time.UnixMilli(ts)) > maxNotifyAge {
+		s.Log.Debug().Str("room_id", string(roomID)).Msg("Not notifying: message is old (catching up)")
 		return
 	}
 	ctx := context.Background()
@@ -29,12 +32,16 @@ func (s *Service) onIncoming(roomID id.RoomID, sender id.UserID, ts int64, previ
 	var mutedUntil int64
 	err := s.Store.DB.QueryRowContext(ctx, "SELECT name, is_dm, muted_until FROM rooms WHERE room_id=? AND is_portal=1", roomID).
 		Scan(&name, &isDM, &mutedUntil)
-	if err != nil || mutedUntil > time.Now().UnixMilli() {
+	if err != nil {
+		return
+	} else if mutedUntil > time.Now().UnixMilli() {
+		s.Log.Debug().Str("room_id", string(roomID)).Msg("Not notifying: chat is muted")
 		return
 	}
 	// Like the official apps, message requests arrive silently.
 	for netID := range s.networks {
 		if portal := s.portalFor(ctx, netID, string(roomID)); portal != nil && portal.MessageRequest {
+			s.Log.Debug().Str("room_id", string(roomID)).Msg("Not notifying: message request")
 			return
 		}
 	}

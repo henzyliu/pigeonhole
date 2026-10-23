@@ -59,6 +59,8 @@ func (a *App) setupNotifications() {
 	go func() {
 		if ok, err := runtime.RequestNotificationAuthorization(a.ctx); err != nil || !ok {
 			a.svc.Log.Warn().Err(err).Bool("granted", ok).Msg("Notification permission not granted")
+		} else {
+			a.svc.Log.Info().Msg("Notification permission granted")
 		}
 	}()
 	// Clicking a notification brings the window forward on that chat.
@@ -74,6 +76,7 @@ func (a *App) setupNotifications() {
 		looking := a.focused && a.activeRoom == n.RoomID
 		a.viewLock.Unlock()
 		if looking {
+			a.svc.Log.Debug().Str("room_id", n.RoomID).Msg("Not notifying: chat is open and focused")
 			return
 		}
 		body := n.Body
@@ -87,7 +90,10 @@ func (a *App) setupNotifications() {
 			Data:  map[string]any{"roomId": n.RoomID},
 		})
 		if err != nil {
-			a.svc.Log.Warn().Err(err).Msg("Failed to send notification")
+			a.svc.Log.Warn().Err(err).Str("room_id", n.RoomID).Msg("Failed to send notification")
+		} else {
+			// Only the chat is logged, never the message.
+			a.svc.Log.Info().Str("room_id", n.RoomID).Msg("Sent notification")
 		}
 	}
 }
