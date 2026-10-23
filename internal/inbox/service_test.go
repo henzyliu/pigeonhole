@@ -26,8 +26,8 @@ func newTestService(t *testing.T) *Service {
 	return svc
 }
 
-// Every login flow should produce a first step the UI knows how to render,
-// without any network traffic being needed to get there.
+// Every login flow should produce a first step the UI knows how to render.
+// QR flows need the network to get there: the code comes from the server.
 func TestLoginFlowsStart(t *testing.T) {
 	svc := newTestService(t)
 	for _, network := range svc.Networks() {
@@ -49,6 +49,10 @@ func TestLoginFlowsStart(t *testing.T) {
 			case "cookies":
 				if step.CookieURL == "" || len(step.CookieNames) == 0 {
 					t.Errorf("%s/%s: cookies step missing url or names", network.ID, flow.ID)
+				}
+			case "display_and_wait":
+				if step.DisplayType == "qr" && !strings.HasPrefix(step.QRImage, "data:image/png;base64,") {
+					t.Errorf("%s/%s: QR step without a QR image", network.ID, flow.ID)
 				}
 			default:
 				t.Errorf("%s/%s: unexpected first step %q", network.ID, flow.ID, step.Type)

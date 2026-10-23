@@ -1,7 +1,8 @@
 import {useId} from 'react';
 
 // Brand marks for each network, drawn as inline SVG so they stay crisp at any
-// size and need no image assets. Gradients follow Meta's published logos.
+// size and need no image assets. Gradients follow Meta's published logos;
+// WhatsApp's mark sits on its brand green.
 export default function NetworkIcon(props: {network: string; size?: number; className?: string; title?: string}) {
     const size = props.size ?? 16;
     const gradientId = useId();
@@ -50,6 +51,17 @@ export default function NetworkIcon(props: {network: string; size?: number; clas
                     <rect x="5" y="5" width="14" height="14" rx="4.2" fill="none" stroke="#fff" strokeWidth="1.8"/>
                     <circle cx="12" cy="12" r="3.3" fill="none" stroke="#fff" strokeWidth="1.8"/>
                     <circle cx="16.1" cy="7.9" r="1.05" fill="#fff"/>
+                </svg>
+            );
+        case 'whatsapp':
+            return (
+                <svg {...common}>
+                    <rect width="24" height="24" rx="6.5" fill="#25D366"/>
+                    {/* Speech bubble with a phone handset */}
+                    <path fill="none" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round"
+                          d="M12 4.6a7.3 7.3 0 0 0-6.3 11l-.9 3.6 3.7-.95A7.3 7.3 0 1 0 12 4.6z"/>
+                    <path fill="#fff"
+                          d="M9.55 8.3c-.17-.38-.35-.39-.51-.4h-.44c-.15 0-.4.06-.61.29-.21.23-.8.78-.8 1.9s.82 2.2.93 2.36c.12.15 1.58 2.53 3.9 3.44 1.93.76 2.32.61 2.74.57.42-.04 1.36-.56 1.55-1.1.19-.53.19-.99.13-1.09-.06-.1-.21-.15-.44-.27-.23-.11-1.36-.67-1.57-.75-.21-.08-.36-.11-.51.12-.15.23-.59.75-.72.9-.13.15-.27.17-.5.06-.23-.12-.97-.36-1.85-1.14-.68-.61-1.14-1.36-1.28-1.59-.13-.23-.01-.35.1-.47.1-.1.23-.27.34-.4.11-.13.15-.23.23-.38.08-.15.04-.29-.02-.4-.06-.12-.5-1.25-.7-1.71z"/>
                 </svg>
             );
         default:

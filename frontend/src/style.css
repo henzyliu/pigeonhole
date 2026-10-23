@@ -360,6 +360,11 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 .choice input { accent-color: var(--accent); margin: 0; }
 .cookie-input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
 .instructions { padding-left: 20px; line-height: 1.6; }
+.qr-code {
+    display: block; width: 220px; height: 220px; margin: 8px auto; padding: 10px;
+    /* QR codes need a light background to scan, even in dark mode. */
+    background: #fff; border-radius: 12px; image-rendering: pixelated;
+}
 .code-display {
     font-size: 22px; letter-spacing: 0.15em; text-align: center; padding: 12px;
     background: var(--bg-side); border-radius: 10px; user-select: text;

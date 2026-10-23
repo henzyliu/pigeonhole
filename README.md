@@ -1,7 +1,7 @@
 # Pigeonhole
 
-A desktop app (macOS + Windows) that shows your Messenger and Instagram DMs in
-one inbox, and lets you reply. Everything runs and is stored locally on your
+A desktop app (macOS + Windows) that shows your Messenger, Instagram and WhatsApp
+chats in one inbox, and lets you reply. Everything runs and is stored locally on your
 computer, so there's no server to host.
 
 The name: a pigeonhole is a mail-sorting slot, pigeons carry messages, and by
@@ -12,13 +12,13 @@ hole ends up holding more than one pigeon.
 
 ```
  Messenger ─┐                                   ┌─ React UI (Wails webview)
-            ├─ mautrix-meta connectors ── localmx ┤
- Instagram ─┘   (in-process, Go)        (SQLite)  └─ inbox service
+ Instagram ─┼─ mautrix connectors ───── localmx ┤
+ WhatsApp  ─┘   (in-process, Go)        (SQLite)  └─ inbox service
 ```
 
 - **Connectors**: the network code from the [mautrix-meta](https://github.com/mautrix/meta)
-  bridges (`pkg/connector` for Messenger, `pkg/igconnector` for Instagram), imported
-  as a Go library. They handle login, sync, E2EE Messenger chats, media, reactions
+  bridges (`pkg/connector` for Messenger, `pkg/igconnector` for Instagram) and
+  [mautrix-whatsapp](https://github.com/mautrix/whatsapp), imported as Go libraries. They handle login, sync, E2EE Messenger chats, media, reactions
   and edits.
 - **`internal/localmx`**: a tiny in-process stand-in for a Matrix homeserver. The
   connectors are written for the mautrix `bridgev2` framework, which expects to talk
@@ -93,6 +93,9 @@ The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
   new "device" can push Meta into account-recovery checks. For Messenger it uses
   facebook.com, since messenger.com hands logins back via cross-site cookies that
   WebKit blocks. Pasting cookies from your own browser still works as a fallback.
+- WhatsApp links as a companion device, like WhatsApp Web (listed as
+  "Pigeonhole" under Linked Devices on your phone). WhatsApp unlinks companions
+  when the phone has been offline for about two weeks. Status updates aren't shown.
 - Messenger chats that *started* end-to-end encrypted aren't in any thread list
   the bridge can read; they appear once a new message arrives in them.
 - The app icon's source is `build/icon/appicon.svg` (a pigeon in a cabinet of
@@ -102,4 +105,4 @@ The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
   ```bash
   go run -C build/icon/gen . -svg ../appicon.svg -out ../..
   ```
-- mautrix-meta is AGPL-3.0, so this app is too if you distribute it.
+- mautrix-meta and mautrix-whatsapp are AGPL-3.0, so this app is too if you distribute it.

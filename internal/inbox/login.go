@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/skip2/go-qrcode"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
@@ -51,7 +53,9 @@ type LoginStep struct {
 	BrowserAvailable bool   `json:"browserAvailable"`
 	DisplayType      string `json:"displayType"`
 	DisplayData      string `json:"displayData"`
-	AccountID        string `json:"accountId"`
+	// QRImage is DisplayData drawn as a QR code (a PNG data URL), for QR steps.
+	QRImage   string `json:"qrImage"`
+	AccountID string `json:"accountId"`
 }
 
 type Account struct {
@@ -341,6 +345,13 @@ func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev
 	case step.DisplayAndWaitParams != nil:
 		out.DisplayType = string(step.DisplayAndWaitParams.Type)
 		out.DisplayData = step.DisplayAndWaitParams.Data
+		if step.DisplayAndWaitParams.Type == bridgev2.LoginDisplayTypeQR {
+			if png, err := qrcode.Encode(out.DisplayData, qrcode.Medium, 512); err == nil {
+				out.QRImage = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+			} else {
+				s.Log.Warn().Err(err).Msg("Failed to draw login QR code")
+			}
+		}
 	case step.CompleteParams != nil:
 		out.AccountID = string(step.CompleteParams.UserLoginID)
 		s.emit("inbox:accounts", nil)

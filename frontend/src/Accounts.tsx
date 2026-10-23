@@ -16,10 +16,14 @@ type View =
 // For Messenger, facebook.com beats messenger.com: messenger.com sends
 // two-step verification to facebook.com and hands the login back with
 // cross-site cookies, which the login window's WebKit blocks, so it loops.
+// WhatsApp links like WhatsApp Web: scan a QR code, or type a pairing code.
 const FLOW_ORDER = [
     'facebook', 'messenger', 'messenger-lite', 'messenger-lite-android',
     'instagram', 'instagram-password', 'android',
+    'qr', 'phone',
 ];
+
+const META_NETWORKS = new Set(['messenger', 'instagram']);
 
 export default function Accounts(props: {accounts: inbox.Account[]; onClose: () => void}) {
     const [view, setView] = useState<View>({kind: 'list'});
@@ -141,16 +145,17 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                     </div>
                     <p className="fine-print">
                         Your messages stay on this computer. Connecting uses the same unofficial method as the
-                        mautrix bridges, so Meta may occasionally ask you to verify the login.
+                        mautrix bridges, so Meta may occasionally ask you to verify the login. WhatsApp links
+                        like WhatsApp Web, and unlinks if your phone is offline for about two weeks.
                     </p>
                 </>}
 
                 {view.kind === 'flows' && <>
                     <p className="muted">Other ways to sign in</p>
-                    <p className="fine-print">
+                    {META_NETWORKS.has(view.network) && <p className="fine-print">
                         Username-and-password sign-in is often challenged or blocked by Meta for apps like this.
                         If it fails, use the recommended option, which logs in on the real website.
-                    </p>
+                    </p>}
                     <div className="flow-list">
                         {view.flows.map((f, i) => (
                             <button key={f.id} className="flow-button" disabled={busy} onClick={() => startFlow(view.network, f.id, view.flows)}>
@@ -284,10 +289,24 @@ function StepForm(props: {
         </div>;
     }
 
+    // WhatsApp can ask to confirm a new linked device with a passkey, which
+    // needs the system's passkey prompt; the other sign-in method avoids it.
+    if (step.type === 'webauthn') {
+        return <div className="step">
+            <p>{NETWORK_LABELS[step.network] ?? step.network} asked to confirm this login with a passkey, which
+                Pigeonhole can't do yet.</p>
+            <div className="modal-actions">
+                <button className="primary" onClick={props.onChooseOther}>Choose another sign-in method</button>
+            </div>
+        </div>;
+    }
+
     if (step.type === 'display_and_wait') {
         return <div className="step">
             <p>{step.instructions}</p>
-            {step.displayData && step.displayType !== 'nothing' && <pre className="code-display">{step.displayData}</pre>}
+            {step.qrImage
+                ? <img className="qr-code" src={step.qrImage} alt="QR code to scan"/>
+                : step.displayData && step.displayType !== 'nothing' && <pre className="code-display">{step.displayData}</pre>}
             <p className="muted">Waiting…</p>
             {errorBanner}
         </div>;
@@ -317,7 +336,7 @@ function StepForm(props: {
                 ) : (
                     <label key={f.id} className="field">
                         <span>{f.name}</span>
-                        <input type={f.type === 'password' ? 'password' : f.type === 'email' ? 'email' : 'text'}
+                        <input type={f.type === 'password' ? 'password' : f.type === 'email' ? 'email' : f.type === 'phone_number' ? 'tel' : 'text'}
                                value={values[f.id] ?? ''} required={!f.optional} autoFocus={i === 0}
                                autoComplete={f.type === 'password' ? 'current-password' : 'off'}
                                onChange={e => setValues(v => ({...v, [f.id]: e.target.value}))}/>

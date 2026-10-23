@@ -150,7 +150,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		return portal != nil && portal.RoomType == database.RoomTypeSpace
 	})
 	for i := range chats {
-		chats[i].Category = chatCategory(s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
+		chats[i].Category = chatCategory(chats[i].Network, s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
 	}
 	// DMs without an explicit name are named after the other person.
 	for i := range chats {
@@ -203,7 +203,7 @@ func (s *Service) portalFor(ctx context.Context, network, roomID string) *bridge
 
 // chatCategory picks the tab a chat belongs in. isDM is the room's own flag,
 // used when the bridge has no portal record for it.
-func chatCategory(portal *bridgev2.Portal, isDM bool) string {
+func chatCategory(network string, portal *bridgev2.Portal, isDM bool) string {
 	switch {
 	case portal == nil && isDM:
 		return CategoryInbox
@@ -211,9 +211,10 @@ func chatCategory(portal *bridgev2.Portal, isDM bool) string {
 		return CategoryGroups
 	case portal.MessageRequest:
 		return CategoryRequests
-	// On Messenger only Marketplace threads live under a parent folder. The
-	// thread type is checked too, since linking to the folder can fail.
-	case portal.ParentKey.ID != "":
+	// On Messenger only Marketplace threads live under a parent folder (on
+	// WhatsApp, community groups do too). The thread type is checked as
+	// well, since linking to the folder can fail.
+	case network == "messenger" && portal.ParentKey.ID != "":
 		return CategoryMarketplace
 	case isMarketplaceThread(portal):
 		return CategoryMarketplace

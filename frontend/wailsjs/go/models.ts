@@ -104,6 +104,7 @@ export namespace inbox {
 	    browserAvailable: boolean;
 	    displayType: string;
 	    displayData: string;
+	    qrImage: string;
 	    accountId: string;
 	
 	    static createFrom(source: any = {}) {
@@ -123,6 +124,7 @@ export namespace inbox {
 	        this.browserAvailable = source["browserAvailable"];
 	        this.displayType = source["displayType"];
 	        this.displayData = source["displayData"];
+	        this.qrImage = source["qrImage"];
 	        this.accountId = source["accountId"];
 	    }
 	

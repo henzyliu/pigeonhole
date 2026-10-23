@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/mautrix-meta/pkg/connector"
 	"go.mau.fi/mautrix-meta/pkg/igconnector"
+	whatsapp "go.mau.fi/mautrix-whatsapp/pkg/connector"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
 	"gopkg.in/yaml.v3"
@@ -87,7 +88,31 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 	if err = s.addNetwork(dataDir, "instagram", "Instagram", ig); err != nil {
 		return nil, err
 	}
+	wa, err := whatsAppConnector()
+	if err != nil {
+		return nil, err
+	}
+	if err = s.addNetwork(dataDir, "whatsapp", "WhatsApp", wa); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// whatsAppConnector is the WhatsApp bridge with its defaults adjusted for a
+// personal inbox.
+func whatsAppConnector() (*whatsapp.WhatsAppConnector, error) {
+	wa := &whatsapp.WhatsAppConnector{}
+	if err := loadConfig(whatsapp.ExampleConfig, &wa.Config); err != nil {
+		return nil, err
+	}
+	// How this computer is listed under Linked Devices on the phone.
+	wa.Config.OSName = "Pigeonhole"
+	// Prefer the name saved in your contacts, as WhatsApp itself does, and
+	// drop the bridge's " (WA)" suffix.
+	wa.Config.DisplaynameTemplate = `{{or .FullName .BusinessName .PushName .Phone .RedactedPhone "Unknown user"}}`
+	// Status updates would otherwise show up as a chat.
+	wa.Config.EnableStatusBroadcast = false
+	return wa, wa.Config.PostProcess()
 }
 
 // loadConfig fills a connector config with the defaults from its example YAML.

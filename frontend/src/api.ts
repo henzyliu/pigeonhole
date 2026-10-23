@@ -7,6 +7,7 @@ export {EventsOn, BrowserOpenURL, OnFileDrop, OnFileDropOff} from '../wailsjs/ru
 export const NETWORK_LABELS: Record<string, string> = {
     messenger: 'Messenger',
     instagram: 'Instagram',
+    whatsapp: 'WhatsApp',
 };
 
 export function errorText(err: unknown): string {
