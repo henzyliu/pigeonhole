@@ -144,7 +144,7 @@ func TestHiddenChatReturnsOnNewMessage(t *testing.T) {
 		}
 	}
 	hidden := func() (h bool) {
-		if err := store.DB.QueryRow("SELECT "+HiddenClause+" FROM rooms WHERE room_id='!a:local'").Scan(&h); err != nil {
+		if err := store.DB.QueryRow("SELECT " + HiddenClause + " FROM rooms WHERE room_id='!a:local'").Scan(&h); err != nil {
 			t.Fatal(err)
 		}
 		return
