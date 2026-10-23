@@ -93,9 +93,19 @@ func (s *Service) LoginFlows(netID string) ([]LoginFlow, error) {
 	}
 	var out []LoginFlow
 	for _, flow := range n.Bridge.Network.GetLoginFlows() {
+		if hiddenFlow(netID, flow.ID) {
+			continue
+		}
 		out = append(out, LoginFlow{ID: flow.ID, Name: flow.Name, Description: flow.Description})
 	}
 	return out, nil
+}
+
+// hiddenFlow hides sign-in methods that are for bridge developers (Discord's
+// "DEBUG_" token flow), or that hit CAPTCHAs this app can't show (Discord's
+// password login).
+func hiddenFlow(netID, flowID string) bool {
+	return strings.HasPrefix(flowID, "DEBUG_") || (netID == "discord" && flowID == "machine")
 }
 
 func (s *Service) StartLogin(netID, flowID string) (*LoginStep, error) {

@@ -1,7 +1,7 @@
 # Pigeonhole
 
 A desktop app (macOS + Windows) that shows your Messenger, Instagram and WhatsApp
-chats in one inbox, and lets you reply. Everything runs and is stored locally on your
+chats (and, experimentally, Discord DMs) in one inbox, and lets you reply. Everything runs and is stored locally on your
 computer, so there's no server to host.
 
 The name: a pigeonhole is a mail-sorting slot, pigeons carry messages, and by
@@ -36,6 +36,12 @@ hole ends up holding more than one pigeon.
   (wired in via a `replace` in `go.mod`). Currently: the thread backfill also pages
   through Messenger's end-to-end encrypted thread list (sync group 95), which
   upstream only fetches the first page of. See `pkg/connector/threadbackfill.go`.
+- **Discord (experimental)**: [mautrix-discord](https://github.com/mautrix/discord)'s
+  in-progress `bridgev2` rewrite (the `megadiscord` branch), pinned to one commit in
+  `go.mod` along with the `beeper/discordgo` fork it needs. Its default config bridges
+  DMs and group DMs only, no servers. Sign-in is the login window (which reads the
+  token from discord.com) or a QR code scanned with the Discord app. Upgrading means
+  picking a newer branch commit and checking it still builds against our mautrix.
 
 Adding another network (Slack, Discord, X, Telegram, ...) means adding its mautrix
 `bridgev2` connector in `inbox.New`; the UI picks it up automatically.
@@ -109,4 +115,6 @@ The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
   ```bash
   go run -C build/icon/gen . -svg ../appicon.svg -out ../..
   ```
-- mautrix-meta and mautrix-whatsapp are AGPL-3.0, so this app is too if you distribute it.
+- Discord doesn't allow unofficial clients ("self-bots"), so a Discord account
+  used here could be flagged. Its bridge is unreleased upstream and may break.
+- mautrix-meta, mautrix-whatsapp and mautrix-discord are AGPL-3.0, so this app is too if you distribute it.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	discord "go.mau.fi/mautrix-discord/pkg/connector"
 	"go.mau.fi/mautrix-meta/pkg/connector"
 	"go.mau.fi/mautrix-meta/pkg/igconnector"
 	whatsapp "go.mau.fi/mautrix-whatsapp/pkg/connector"
@@ -106,6 +107,16 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 		return nil, err
 	}
 	if err = s.addNetwork(dataDir, "whatsapp", "WhatsApp", wa); err != nil {
+		return nil, err
+	}
+	// Discord is experimental: it uses the bridge's in-progress bridgev2
+	// rewrite (pinned in go.mod). Its default config bridges DMs and group
+	// DMs only, no servers.
+	dc := &discord.DiscordConnector{}
+	if err = loadConfig(discord.ExampleConfig, &dc.Config); err != nil {
+		return nil, err
+	}
+	if err = s.addNetwork(dataDir, "discord", "Discord", dc); err != nil {
 		return nil, err
 	}
 	return s, nil

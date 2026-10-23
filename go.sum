@@ -19,6 +19,8 @@ github.com/armfazh/tozan-ecc v0.1.3 h1:g3OKE0KR4L/GZaoQYzsOUdg97Ey5lZRl1i1fD/QkU
 github.com/armfazh/tozan-ecc v0.1.3/go.mod h1:u25eZC5Z8uJFQxJxGBz1Blfii/7m3DfmwX0vFnwtG9I=
 github.com/beeper/argo-go v1.1.2 h1:UQI2G8F+NLfGTOmTUI0254pGKx/HUU/etbUGTJv91Fs=
 github.com/beeper/argo-go v1.1.2/go.mod h1:M+LJAnyowKVQ6Rdj6XYGEn+qcVFkb3R/MUpqkGR0hM4=
+github.com/beeper/discordgo v0.0.0-20261016105259-972d950892bf h1:5qp3acXhDQcM9Qb797Oe4UEsRTTFamRXO5JfETNqXSg=
+github.com/beeper/discordgo v0.0.0-20261016105259-972d950892bf/go.mod h1:ATQaN5n/cY4rxHFSsp4UOB1cxf4gdtreFt5NXmlVTmc=
 github.com/beeper/poly1305 v0.0.0-20250815183548-d4eede7bbf3c h1:Axyrzr6L42CLNJIQq0S87UhgK0Hq+4hCed4rc6sDdao=
 github.com/beeper/poly1305 v0.0.0-20250815183548-d4eede7bbf3c/go.mod h1:mo9x0FBxrMo75mAnk1ALdXrHfe8NG3C25CFDf4RSRpc=
 github.com/beeper/req/v3 v3.0.0-20260925135712-b49593750e56 h1:VQTcNnqViZfzYJtDue7HUF9Y979KdafTdJkX/DPasSQ=
@@ -164,6 +166,8 @@ github.com/yuin/goldmark v1.8.6 h1:d0VcaP1sx9GkFVkoW+KtggpGi2KZ965i14b0+bDQST4=
 github.com/yuin/goldmark v1.8.6/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 go.mau.fi/libsignal v0.2.2 h1:QV+XdzQkm3x3aSG7FcqfGSZuFXz83pRZPBFaPygHbOU=
 go.mau.fi/libsignal v0.2.2/go.mod h1:CRlIQg2J8uYTfDFvNoO8/KcZjs5cey0vbc6oj/bssY0=
+go.mau.fi/mautrix-discord v0.7.6-0.20261022150716-bf7bb1190eea h1:SZ1ywnvI2b/mZEKju1qAKLJo4m38cNfpVw9Zsc7gX+8=
+go.mau.fi/mautrix-discord v0.7.6-0.20261022150716-bf7bb1190eea/go.mod h1:0Ax6t3eJe/qXWlvXkC4dcyMeHQ3Wu6Y39bZo47z1qeU=
 go.mau.fi/mautrix-whatsapp v0.2610.0 h1:7gtd36jRCA8XKeHJcF0QsnhE77+rIOq4jd3QAiqsQ8U=
 go.mau.fi/mautrix-whatsapp v0.2610.0/go.mod h1:b0j63WYi8//9Svub5EX9PAB2aK7w9GFTdWuX35ZksIg=
 go.mau.fi/util v0.11.0 h1:JNEpkVRxfTdJUC0DIGKiRlLKzl4G/qLX/eVzoP7QuwY=

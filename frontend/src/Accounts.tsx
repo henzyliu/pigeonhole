@@ -1,5 +1,5 @@
 import {FormEvent, useEffect, useRef, useState} from 'react';
-import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS} from './api';
+import {BrowserOpenURL, errorText, EXPERIMENTAL_NETWORKS, Go, inbox, NETWORK_LABELS} from './api';
 import NetworkIcon from './NetworkIcon';
 
 type View =
@@ -17,10 +17,12 @@ type View =
 // two-step verification to facebook.com and hands the login back with
 // cross-site cookies, which the login window's WebKit blocks, so it loops.
 // WhatsApp links like WhatsApp Web: scan a QR code, or type a pairing code.
+// Discord's "token" flow is its browser login, ranked ahead of the "qr"
+// flow both networks share; WhatsApp has no "token" flow, so its QR stays first.
 const FLOW_ORDER = [
     'facebook', 'messenger', 'messenger-lite', 'messenger-lite-android',
     'instagram', 'instagram-password', 'android',
-    'qr', 'phone',
+    'token', 'qr', 'phone',
 ];
 
 const META_NETWORKS = new Set(['messenger', 'instagram']);
@@ -147,13 +149,16 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                         {networks.map(n => (
                             <button key={n.id} className="network-button" disabled={busy} onClick={() => pickNetwork(n.id)}>
                                 <NetworkIcon network={n.id} size={28}/>{n.name}
+                                {EXPERIMENTAL_NETWORKS.has(n.id) && <span className="pill subtle">Experimental</span>}
                             </button>
                         ))}
                     </div>
                     <p className="fine-print">
                         Your messages stay on this computer. Connecting uses the same unofficial method as the
                         mautrix bridges, so Meta may occasionally ask you to verify the login. WhatsApp links
-                        like WhatsApp Web, and unlinks if your phone is offline for about two weeks.
+                        like WhatsApp Web, and unlinks if your phone is offline for about two weeks. Discord
+                        support is experimental: it covers direct and group messages (not servers), and Discord's
+                        rules don't allow unofficial clients, so use it at your own risk.
                     </p>
                 </>}
 

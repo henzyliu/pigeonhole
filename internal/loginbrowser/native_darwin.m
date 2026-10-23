@@ -123,6 +123,12 @@ static NSString *PHSafariUserAgentSuffix(void) {
             if ([result isKindOfClass:[NSDictionary class]]) {
                 self.extracted = result;
                 [self snapshot];
+            } else if (error && !self.closed) {
+                // A page load interrupted it (and its own re-run was skipped
+                // while this one was still running), so start it again.
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    [self runExtract];
+                });
             }
         }];
     }
