@@ -32,6 +32,12 @@ type Chat struct {
 	Category string `json:"category"`
 	// Hidden chats are listed separately until a new message arrives.
 	Hidden bool `json:"hidden"`
+	// When the latest message is yours: its delivery status ("success",
+	// "delivered", "pending", ...) and who has read it, for the list's
+	// Sent / Delivered / Seen indicator.
+	LastFromMe bool     `json:"lastFromMe"`
+	LastStatus string   `json:"lastStatus"`
+	SeenBy     []Reader `json:"seenBy"`
 }
 
 type Reaction struct {
@@ -151,6 +157,9 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 	})
 	for i := range chats {
 		chats[i].Category = chatCategory(chats[i].Network, s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
+	}
+	if err = s.attachLatestStatus(ctx, chats, profiles); err != nil {
+		return nil, err
 	}
 	// DMs without an explicit name are named after the other person.
 	for i := range chats {
@@ -380,6 +389,75 @@ func (s *Service) attachReceipts(ctx context.Context, roomID string, msgs []Mess
 			}
 			break
 		}
+	}
+	return rows.Err()
+}
+
+// attachLatestStatus marks chats whose latest message is yours, with its
+// delivery status and the people who have read up to it. It's the same rule
+// as the thread's Seen indicator, applied to each chat's newest message.
+func (s *Service) attachLatestStatus(ctx context.Context, chats []Chat, profiles map[id.UserID]profile) error {
+	type latest struct {
+		ts     int64
+		sender id.UserID
+	}
+	byRoom := make(map[string]int, len(chats))
+	for i := range chats {
+		byRoom[chats[i].RoomID] = i
+	}
+	// rooms.last_ts is the newest message's timestamp, so this uses the
+	// (room_id, ts) index. Ties are broken arbitrarily.
+	rows, err := s.Store.DB.QueryContext(ctx, `
+		SELECT e.room_id, e.sender, e.status, e.ts
+		FROM rooms r JOIN events e ON e.room_id = r.room_id AND e.ts = r.last_ts
+		WHERE r.is_portal = 1`)
+	if err != nil {
+		return err
+	}
+	last := make(map[string]latest)
+	for rows.Next() {
+		var roomID, sender, status string
+		var ts int64
+		if err = rows.Scan(&roomID, &sender, &status, &ts); err != nil {
+			rows.Close()
+			return err
+		}
+		i, ok := byRoom[roomID]
+		if !ok {
+			continue
+		}
+		senderID := id.UserID(sender)
+		last[roomID] = latest{ts: ts, sender: senderID}
+		chats[i].LastFromMe = senderID == Me || s.isSelf(senderID)
+		chats[i].LastStatus = status
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+
+	rows, err = s.Store.DB.QueryContext(ctx, `
+		SELECT r.room_id, r.user_id, COALESCE(e.ts, -1)
+		FROM receipts r LEFT JOIN events e ON e.event_id = r.event_id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var roomID, userID string
+		var readTS int64
+		if err = rows.Scan(&roomID, &userID, &readTS); err != nil {
+			return err
+		}
+		i, ok := byRoom[roomID]
+		l, hasLast := last[roomID]
+		reader := id.UserID(userID)
+		if !ok || !hasLast || !chats[i].LastFromMe || readTS < l.ts ||
+			reader == Me || reader == l.sender || s.isSelf(reader) {
+			continue
+		}
+		p := profiles[reader]
+		chats[i].SeenBy = append(chats[i].SeenBy, Reader{Name: p.name, Avatar: MediaURL(p.avatar)})
 	}
 	return rows.Err()
 }

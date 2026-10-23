@@ -163,6 +163,22 @@ a { color: inherit; }
 .chat-time { font-size: 12px; color: var(--fg-muted); flex-shrink: 0; }
 .chat-preview { color: var(--fg-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-row.unread .chat-name, .chat-row.unread .chat-preview { font-weight: 650; color: var(--fg); }
+/* Sent / Delivered / Seen for your latest message, in the chat list. The
+   rings around stacked photos match the row's background. */
+.list-status { flex-shrink: 0; display: flex; align-items: center; }
+.tick {
+    width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 10px; font-weight: 700; box-sizing: border-box;
+}
+.tick.sent { border: 1.3px solid var(--fg-muted); color: var(--fg-muted); }
+.tick.delivered { background: var(--fg-muted); color: var(--bg-side); }
+.tick.failed { background: var(--danger); color: #fff; }
+.list-seen .avatar { font-size: 7px !important; box-shadow: 0 0 0 1.5px var(--bg-side); }
+.list-seen .avatar + .avatar { margin-left: -5px; }
+.chat-row.selected .list-seen .avatar { box-shadow: 0 0 0 1.5px var(--bg-selected); }
+.chat-row:hover:not(.selected) .list-seen .avatar { box-shadow: 0 0 0 1.5px var(--bg-hover); }
+.chat-row.selected .tick.delivered { color: var(--bg-selected); }
+.chat-row:hover:not(.selected) .tick.delivered { color: var(--bg-hover); }
 .badge {
     background: var(--accent); color: var(--fg-on-accent);
     font-size: 11px; font-weight: 700; min-width: 20px; height: 20px; padding: 0 6px;

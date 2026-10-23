@@ -11,6 +11,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"unified-inbox/internal/localmx"
 )
 
 func newTestService(t *testing.T) *Service {
@@ -132,6 +134,70 @@ func TestPortalRoundTrip(t *testing.T) {
 	}
 	if chats, _ = svc.Chats(ctx); chats[0].Unread != 0 {
 		t.Fatalf("expected chat to be read: %+v", chats[0])
+	}
+}
+
+// The chat list shows Sent / Delivered / Seen for your latest message, and
+// nothing when the other person spoke last.
+func TestChatListLatestStatus(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	mx := svc.networks["instagram"].MX
+	ghost := mx.GhostIntent("12345")
+	if err := ghost.SetDisplayName(ctx, "Alice"); err != nil {
+		t.Fatal(err)
+	}
+	stateKey := ""
+	roomID, err := mx.BotIntent().CreateRoom(ctx, &mautrix.ReqCreateRoom{
+		IsDirect: true,
+		Invite:   []id.UserID{ghost.GetMXID(), Me},
+		InitialState: []*event.Event{{
+			Type: event.StateBridge, StateKey: &stateKey,
+			Content: event.Content{Parsed: &event.BridgeEventContent{}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := ghost.SendMessage(ctx, roomID, event.EventMessage, &event.Content{
+		Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "hi"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest := func() Chat {
+		t.Helper()
+		chats, err := svc.Chats(ctx)
+		if err != nil || len(chats) != 1 {
+			t.Fatalf("chats: %+v, %v", chats, err)
+		}
+		return chats[0]
+	}
+	if c := latest(); c.LastFromMe || len(c.SeenBy) != 0 {
+		t.Fatalf("their message shouldn't get a status: %+v", c)
+	}
+
+	// A receipt on their own message isn't "seen" for anything of yours.
+	if err = svc.Store.SetReceipt(ctx, roomID, ghost.GetMXID(), theirs.EventID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	mine := &event.Event{
+		ID: "$mine", RoomID: roomID, Sender: Me, Type: event.EventMessage, Timestamp: time.Now().UnixMilli() + 1000,
+		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "see you at 7"}},
+	}
+	if err = svc.Store.HandleEvent(ctx, mine, false); err != nil {
+		t.Fatal(err)
+	}
+	svc.Store.SetEventStatus(ctx, mine.ID, roomID, localmx.StatusDelivered)
+	if c := latest(); !c.LastFromMe || c.LastStatus != localmx.StatusDelivered || len(c.SeenBy) != 0 {
+		t.Fatalf("expected delivered and unseen: %+v", c)
+	}
+
+	if err = svc.Store.SetReceipt(ctx, roomID, ghost.GetMXID(), mine.ID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if c := latest(); len(c.SeenBy) != 1 || c.SeenBy[0].Name != "Alice" {
+		t.Fatalf("expected Alice to have seen it: %+v", c)
 	}
 }
 
