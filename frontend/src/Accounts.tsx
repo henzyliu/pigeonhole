@@ -13,8 +13,11 @@ type View =
 // Recommended badge). Cookie logins come first for both networks: password
 // login from a "new device" tends to trip Meta's checks (Instagram's CAPTCHA
 // needs a built-in browser; Messenger can push it into account recovery).
+// For Messenger, facebook.com beats messenger.com: messenger.com sends
+// two-step verification to facebook.com and hands the login back with
+// cross-site cookies, which the login window's WebKit blocks, so it loops.
 const FLOW_ORDER = [
-    'messenger', 'facebook', 'messenger-lite', 'messenger-lite-android',
+    'facebook', 'messenger', 'messenger-lite', 'messenger-lite-android',
     'instagram', 'instagram-password', 'android',
 ];
 

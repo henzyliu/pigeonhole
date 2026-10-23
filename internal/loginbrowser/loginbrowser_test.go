@@ -174,3 +174,27 @@ func TestPageForLogDropsQuery(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// Messenger's facebook.com mode: same cookies, all on facebook.com, finishing
+// on the Facebook home page or Messages.
+func TestCollectFacebookCookies(t *testing.T) {
+	p := &bridgev2.LoginCookiesParams{
+		Fields: []bridgev2.LoginCookieField{
+			cookieField("xs", "facebook.com", true),
+			cookieField("c_user", "facebook.com", true),
+			cookieField("datr", "facebook.com", true),
+		},
+		WaitForURLPattern: `^https://www\.facebook\.com/(?:messages/(?:e2ee/)?(?:t/[0-9]+/?)?)?(?:\?.*)?$`,
+	}
+	fb := []Cookie{
+		{Name: "xs", Value: "x", Domain: ".facebook.com"},
+		{Name: "c_user", Value: "42", Domain: ".facebook.com"},
+		{Name: "datr", Value: "d", Domain: ".facebook.com"},
+	}
+	if _, done := Collect(p, &Snapshot{URL: "https://www.facebook.com/two_step_verification/authentication/", Cookies: fb}); done {
+		t.Fatal("shouldn't finish on the 2FA page")
+	}
+	if values, done := Collect(p, &Snapshot{URL: "https://www.facebook.com/", Cookies: fb}); !done || values["c_user"] != "42" {
+		t.Fatalf("expected to finish on the home page, got %v %v", values, done)
+	}
+}
