@@ -99,6 +99,7 @@ export namespace inbox {
 	    cookieUrl: string;
 	    cookieNames: string[];
 	    needsBrowser: boolean;
+	    browserAvailable: boolean;
 	    displayType: string;
 	    displayData: string;
 	    accountId: string;
@@ -117,6 +118,7 @@ export namespace inbox {
 	        this.cookieUrl = source["cookieUrl"];
 	        this.cookieNames = source["cookieNames"];
 	        this.needsBrowser = source["needsBrowser"];
+	        this.browserAvailable = source["browserAvailable"];
 	        this.displayType = source["displayType"];
 	        this.displayData = source["displayData"];
 	        this.accountId = source["accountId"];

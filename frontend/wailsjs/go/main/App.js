@@ -6,6 +6,10 @@ export function Accounts() {
   return window['go']['main']['App']['Accounts']();
 }
 
+export function BrowserLogin(arg1) {
+  return window['go']['main']['App']['BrowserLogin'](arg1);
+}
+
 export function CancelLogin(arg1) {
   return window['go']['main']['App']['CancelLogin'](arg1);
 }

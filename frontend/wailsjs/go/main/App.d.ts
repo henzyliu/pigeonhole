@@ -4,6 +4,8 @@ import {inbox} from '../models';
 
 export function Accounts():Promise<Array<inbox.Account>>;
 
+export function BrowserLogin(arg1:string):Promise<inbox.LoginStep>;
+
 export function CancelLogin(arg1:string):Promise<void>;
 
 export function Chats():Promise<Array<inbox.Chat>>;

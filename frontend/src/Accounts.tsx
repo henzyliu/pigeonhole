@@ -125,6 +125,7 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
 
                 {view.kind === 'step' && <StepForm key={stepKey(view.step)} step={view.step} busy={busy} error={error}
                                                    onSubmit={v => submit(view.step, v)}
+                                                   onBrowserLogin={() => run(async () => showStep(await Go.BrowserLogin(view.step.sessionId)))}
                                                    onChooseOther={() => {
                                                        Go.CancelLogin(view.step.sessionId);
                                                        pickNetwork(view.step.network);
@@ -185,6 +186,7 @@ function StepForm(props: {
     error: string;
     onSubmit: (values: Record<string, string>) => void;
     onChooseOther: () => void;
+    onBrowserLogin: () => void;
 }) {
     const {step} = props;
     // Errors sit right above Continue and scroll into view, since long steps
@@ -204,6 +206,27 @@ function StepForm(props: {
 
     // Some steps (like Instagram's CAPTCHA) only work inside an embedded
     // browser. Pasting can't satisfy them, so explain and offer a way out.
+    if (step.type === 'cookies' && step.browserAvailable) {
+        const site = step.cookieUrl ? new URL(step.cookieUrl).hostname.replace(/^www\./, '') : 'the website';
+        return <div className="step">
+            {step.instructions && <p>{step.instructions}</p>}
+            <p>A login window will open on <strong>{site}</strong>. Log in as usual, including any security
+                checks; the window closes by itself once you're in.</p>
+            {errorBanner}
+            <div className="modal-actions">
+                <button className="primary" onClick={props.onBrowserLogin} disabled={props.busy}>
+                    {props.busy ? 'Waiting for you to log in…' : 'Log in in a window'}
+                </button>
+            </div>
+            {!step.needsBrowser && !props.busy && (
+                <details className="paste-fallback">
+                    <summary>Or paste cookies instead</summary>
+                    <PasteCookies step={step} busy={props.busy} onSubmit={props.onSubmit}/>
+                </details>
+            )}
+        </div>;
+    }
+
     if (step.type === 'cookies' && step.needsBrowser) {
         return <div className="step">
             {step.instructions && <p className="muted">{NETWORK_LABELS[step.network] ?? step.network} says: “{step.instructions}”</p>}
@@ -231,13 +254,7 @@ function StepForm(props: {
         <form className="step" onSubmit={onSubmit}>
             {step.type === 'cookies' ? <>
                 {step.instructions && <p>{step.instructions}</p>}
-                <ol className="instructions">
-                    <li>Open <button type="button" className="link" onClick={() => BrowserOpenURL(step.cookieUrl)}>{step.cookieUrl}</button> in your browser and log in.</li>
-                    <li>Open developer tools (⌥⌘I on Mac, F12 on Windows) → Network tab, then reload the page.</li>
-                    <li>Click the first request and copy the value of the <strong>cookie</strong> request header
-                        (or right-click it → Copy → <strong>Copy as cURL</strong>), and paste it below.</li>
-                </ol>
-                <p className="muted">Needed cookies: {(step.cookieNames ?? []).join(', ')}</p>
+                <CookieInstructions step={step}/>
                 <textarea className="cookie-input" rows={6} placeholder="name=value; name=value…  or a curl command"
                           value={values.cookies ?? ''} onChange={e => setValues({cookies: e.target.value})} autoFocus/>
             </> : <>
@@ -268,6 +285,36 @@ function StepForm(props: {
             {errorBanner}
             <div className="modal-actions">
                 <button className="primary" type="submit" disabled={props.busy}>{props.busy ? 'Working…' : 'Continue'}</button>
+            </div>
+        </form>
+    );
+}
+
+function CookieInstructions({step}: {step: inbox.LoginStep}) {
+    return <>
+        <ol className="instructions">
+            <li>Open <button type="button" className="link" onClick={() => BrowserOpenURL(step.cookieUrl)}>{step.cookieUrl}</button> in your browser and log in.</li>
+            <li>Open developer tools (⌥⌘I on Mac, F12 on Windows) → Network tab, then reload the page.</li>
+            <li>Click the first request and copy the value of the <strong>cookie</strong> request header
+                (or right-click it → Copy → <strong>Copy as cURL</strong>), and paste it below.</li>
+        </ol>
+        <p className="muted">Needed cookies: {(step.cookieNames ?? []).join(', ')}</p>
+    </>;
+}
+
+// The manual fallback for cookie steps when using the login window isn't wanted.
+function PasteCookies(props: {step: inbox.LoginStep; busy: boolean; onSubmit: (values: Record<string, string>) => void}) {
+    const [cookies, setCookies] = useState('');
+    return (
+        <form className="step" onSubmit={e => {
+            e.preventDefault();
+            props.onSubmit({cookies});
+        }}>
+            <CookieInstructions step={props.step}/>
+            <textarea className="cookie-input" rows={5} placeholder="name=value; name=value…  or a curl command"
+                      value={cookies} onChange={e => setCookies(e.target.value)}/>
+            <div className="modal-actions">
+                <button type="submit" disabled={props.busy || !cookies.trim()}>Continue with pasted cookies</button>
             </div>
         </form>
     );

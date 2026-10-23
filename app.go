@@ -121,6 +121,11 @@ func (a *App) SubmitLogin(sessionID string, values map[string]string) (*inbox.Lo
 
 func (a *App) CancelLogin(sessionID string) { a.svc.CancelLogin(sessionID) }
 
+// BrowserLogin completes a cookie step in the built-in login window.
+func (a *App) BrowserLogin(sessionID string) (*inbox.LoginStep, error) {
+	return a.svc.BrowserLogin(sessionID)
+}
+
 func (a *App) Accounts() ([]inbox.Account, error) { return a.svc.Accounts() }
 
 func (a *App) Logout(network, loginID string) error { return a.svc.Logout(network, loginID) }

@@ -357,3 +357,9 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 .person-row:hover .avatar-net { background: var(--bg-hover); }
 .person-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-action { font-size: 12.5px; flex-shrink: 0; }
+
+.paste-fallback { margin-top: 14px; }
+.paste-fallback summary { cursor: pointer; color: var(--fg-muted); font-size: 13px; }
+.paste-fallback .modal-actions button {
+    border: 1px solid var(--border); background: var(--bg-side); padding: 8px 14px; border-radius: 20px;
+}

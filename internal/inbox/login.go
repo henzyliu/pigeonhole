@@ -1,6 +1,7 @@
 package inbox
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
+
+	"unified-inbox/internal/loginbrowser"
 )
 
 type LoginFlow struct {
@@ -41,11 +44,14 @@ type LoginStep struct {
 	CookieURL    string       `json:"cookieUrl"`
 	CookieNames  []string     `json:"cookieNames"`
 	// NeedsBrowser is set for cookie steps that can only be completed inside an
-	// embedded browser (e.g. Instagram's CAPTCHA), which Pigeonhole doesn't have.
-	NeedsBrowser bool   `json:"needsBrowser"`
-	DisplayType  string `json:"displayType"`
-	DisplayData  string `json:"displayData"`
-	AccountID    string `json:"accountId"`
+	// embedded browser (e.g. Instagram's CAPTCHA), so pasting can't work.
+	NeedsBrowser bool `json:"needsBrowser"`
+	// BrowserAvailable is set when the built-in login window can complete
+	// this cookie step (see BrowserLogin).
+	BrowserAvailable bool   `json:"browserAvailable"`
+	DisplayType      string `json:"displayType"`
+	DisplayData      string `json:"displayData"`
+	AccountID        string `json:"accountId"`
 }
 
 type Account struct {
@@ -61,6 +67,8 @@ type pendingLogin struct {
 	network string
 	process bridgev2.LoginProcess
 	step    *bridgev2.LoginStep
+	// closeBrowser closes the login window, if one is open for this login.
+	closeBrowser context.CancelFunc
 }
 
 func (s *Service) Networks() []LoginFlow {
@@ -134,11 +142,7 @@ func (s *Service) SubmitLogin(sessionID string, values map[string]string) (*Logi
 		var cookies map[string]string
 		if cookies, err = ParseCookies(values["cookies"]); err == nil {
 			log.Info().Strs("cookie_names", mapKeys(cookies)).Msg("Submitting login cookies")
-			if proc, ok := pending.process.(bridgev2.LoginProcessCookies); !ok {
-				err = errUnsupportedStep
-			} else {
-				step, err = proc.SubmitCookies(s.ctx, cookies)
-			}
+			step, err = s.submitCookies(pending, cookies)
 		}
 	case bridgev2.LoginStepTypeDisplayAndWait:
 		if proc, ok := pending.process.(bridgev2.LoginProcessDisplayAndWait); !ok {
@@ -218,10 +222,74 @@ func (s *Service) CancelLogin(sessionID string) {
 	s.lock.Lock()
 	pending, ok := s.logins[sessionID]
 	delete(s.logins, sessionID)
+	closeBrowser := pending.closeBrowserFunc()
 	s.lock.Unlock()
+	if closeBrowser != nil {
+		closeBrowser()
+	}
 	if ok {
 		pending.process.Cancel()
 	}
+}
+
+func (p *pendingLogin) closeBrowserFunc() context.CancelFunc {
+	if p == nil {
+		return nil
+	}
+	return p.closeBrowser
+}
+
+func (s *Service) submitCookies(pending *pendingLogin, cookies map[string]string) (*bridgev2.LoginStep, error) {
+	proc, ok := pending.process.(bridgev2.LoginProcessCookies)
+	if !ok {
+		return nil, errUnsupportedStep
+	}
+	return proc.SubmitCookies(s.ctx, cookies)
+}
+
+// BrowserLogin completes the current cookie step in the built-in login
+// window: the user logs in on the real website, and the cookies (or script
+// results) the bridge asked for are collected automatically. It blocks until
+// the window finishes or is closed.
+func (s *Service) BrowserLogin(sessionID string) (*LoginStep, error) {
+	s.lock.Lock()
+	pending, ok := s.logins[sessionID]
+	s.lock.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("login session expired, please start again")
+	} else if pending.step.Type != bridgev2.LoginStepTypeCookies || pending.step.CookiesParams == nil {
+		return nil, errUnsupportedStep
+	}
+	n, err := s.network(pending.network)
+	if err != nil {
+		return nil, err
+	}
+	log := s.Log.With().Str("network", pending.network).Str("step_id", pending.step.StepID).Logger()
+	ctx, closeBrowser := context.WithCancel(s.ctx)
+	defer closeBrowser()
+	s.lock.Lock()
+	pending.closeBrowser = closeBrowser
+	s.lock.Unlock()
+	defer func() {
+		s.lock.Lock()
+		pending.closeBrowser = nil
+		s.lock.Unlock()
+	}()
+
+	log.Info().Msg("Opening login window")
+	values, err := loginbrowser.Open(ctx, "Log in to "+n.Name, pending.step.CookiesParams)
+	if err != nil {
+		log.Info().Err(err).Msg("Login window finished without logging in")
+		return nil, err
+	}
+	// Only names are logged, never the values.
+	log.Info().Strs("cookie_names", mapKeys(values)).Msg("Submitting cookies from login window")
+	step, err := s.submitCookies(pending, values)
+	if err != nil {
+		log.Warn().Err(err).Msg("Login step failed")
+		return nil, err
+	}
+	return s.advance(sessionID, pending, step), nil
 }
 
 func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev2.LoginStep) *LoginStep {
@@ -251,6 +319,7 @@ func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev
 			out.CookieNames = append(out.CookieNames, f.ID)
 		}
 		out.NeedsBrowser = needsEmbeddedBrowser(step.CookiesParams)
+		out.BrowserAvailable = loginbrowser.Supported() && loginbrowser.CanComplete(step.CookiesParams)
 	case step.DisplayAndWaitParams != nil:
 		out.DisplayType = string(step.DisplayAndWaitParams.Type)
 		out.DisplayData = step.DisplayAndWaitParams.Data
