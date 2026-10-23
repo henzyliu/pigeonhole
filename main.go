@@ -26,7 +26,9 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize inbox")
 	}
-	app := NewApp(svc)
+	settings := loadSettings(dir)
+	app := NewApp(svc, dir, settings)
+	background, macOptions, windowsOptions := windowAppearance(settings.Theme)
 
 	err = wails.Run(&options.App{
 		Title:     "Pigeonhole",
@@ -38,7 +40,9 @@ func main() {
 			Assets:  assets,
 			Handler: svc.MediaHandler(),
 		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
+		BackgroundColour: background,
+		Mac:              macOptions,
+		Windows:          windowsOptions,
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,

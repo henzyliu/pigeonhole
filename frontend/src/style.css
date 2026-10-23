@@ -16,8 +16,25 @@
     color-scheme: light;
 }
 
+/* Dark colours apply when the user picks Dark (data-theme="dark" on <html>),
+   or when they leave it on System and macOS/Windows is in dark mode.
+   The two blocks must stay identical. */
+:root[data-theme="dark"] {
+    --bg: #17181c;
+    --bg-side: #1e1f24;
+    --bg-hover: #2a2b31;
+    --bg-selected: #32343c;
+    --bg-bubble: #2a2b31;
+    --bg-bubble-me: #3d6cf4;
+    --fg: #ececf1;
+    --fg-muted: #9a9cab;
+    --border: #2e3036;
+    --danger-bg: #3b1f22;
+    color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --bg: #17181c;
         --bg-side: #1e1f24;
         --bg-hover: #2a2b31;
@@ -367,3 +384,9 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 .account-list li.confirming { align-items: flex-start; }
 .logout-warning { font-size: 12.5px; color: var(--fg-muted); line-height: 1.4; margin-top: 2px; }
 button.link.danger { color: var(--danger); font-weight: 600; }
+
+/* Settings */
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
+.setting-label { font-weight: 600; }
+.setting-hint { font-size: 12.5px; margin-top: 2px; }
+.setting-choice { margin: 0; flex-shrink: 0; width: 220px; }

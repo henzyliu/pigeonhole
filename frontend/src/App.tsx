@@ -4,6 +4,8 @@ import ChatList from './ChatList';
 import Thread from './Thread';
 import Accounts from './Accounts';
 import NewChat from './NewChat';
+import Settings from './Settings';
+import {applyTheme, Theme} from './theme';
 import NetworkIcon from './NetworkIcon';
 
 type Filter = 'all' | 'unread' | string;
@@ -26,6 +28,17 @@ export default function App() {
     const [query, setQuery] = useState('');
     const [showAccounts, setShowAccounts] = useState(false);
     const [showNewChat, setShowNewChat] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [theme, setTheme] = useState<Theme>('system');
+
+    // The saved setting wins over the early copy index.html applied.
+    useEffect(() => {
+        Go.GetSettings().then(s => {
+            const t = (s?.theme as Theme) || 'system';
+            applyTheme(t);
+            setTheme(t);
+        }).catch(console.error);
+    }, []);
     const [startError, setStartError] = useState('');
     const [messageTick, setMessageTick] = useState(0);
     const selectedRef = useRef(selected);
@@ -157,6 +170,13 @@ export default function App() {
                                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
                             </svg>
                         </button>
+                        <button className="icon-button" title="Settings" onClick={() => setShowSettings(true)}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                 strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                            </svg>
+                        </button>
                         <button className="icon-button" title="Accounts" onClick={() => setShowAccounts(true)}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <circle cx="12" cy="8" r="4"/>
@@ -222,6 +242,7 @@ export default function App() {
             </main>
             {showAccounts && <Accounts accounts={accounts} onClose={() => setShowAccounts(false)}/>}
             {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
+            {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}/>}
         </div>
     );
 }

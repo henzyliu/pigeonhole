@@ -18,6 +18,10 @@ export function Chats() {
   return window['go']['main']['App']['Chats']();
 }
 
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
 export function LoginFlows(arg1) {
   return window['go']['main']['App']['LoginFlows'](arg1);
 }
@@ -60,6 +64,10 @@ export function SendFiles(arg1, arg2) {
 
 export function SendText(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendText'](arg1, arg2, arg3);
+}
+
+export function SetTheme(arg1) {
+  return window['go']['main']['App']['SetTheme'](arg1);
 }
 
 export function SetView(arg1, arg2) {

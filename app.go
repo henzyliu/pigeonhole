@@ -27,14 +27,19 @@ type App struct {
 	viewLock   sync.Mutex
 	activeRoom string
 	focused    bool
+
+	dataDir      string
+	settingsLock sync.Mutex
+	settings     Settings
 }
 
-func NewApp(svc *inbox.Service) *App {
-	return &App{svc: svc}
+func NewApp(svc *inbox.Service, dataDir string, settings Settings) *App {
+	return &App{svc: svc, dataDir: dataDir, settings: settings}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	applyTheme(ctx, a.GetSettings().Theme)
 	a.svc.Emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
 	a.setupNotifications()
 	go func() {

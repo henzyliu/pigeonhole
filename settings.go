@@ -1,0 +1,110 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"unified-inbox/internal/appearance"
+)
+
+// Settings are the user's app preferences, stored as settings.json in the
+// data directory.
+type Settings struct {
+	// Theme is "system", "light" or "dark".
+	Theme string `json:"theme"`
+}
+
+func settingsPath(dir string) string { return filepath.Join(dir, "settings.json") }
+
+func loadSettings(dir string) Settings {
+	s := Settings{Theme: appearance.System}
+	data, err := os.ReadFile(settingsPath(dir))
+	if err == nil {
+		_ = json.Unmarshal(data, &s)
+	}
+	if !appearance.Valid(s.Theme) {
+		s.Theme = appearance.System
+	}
+	return s
+}
+
+func (s Settings) save(dir string) error {
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := settingsPath(dir) + ".tmp"
+	if err = os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, settingsPath(dir))
+}
+
+// Dark matches the UI's dark --bg colour, so a dark-themed window doesn't
+// flash white while the page loads.
+var (
+	lightBackground = &options.RGBA{R: 255, G: 255, B: 255, A: 1}
+	darkBackground  = &options.RGBA{R: 0x17, G: 0x18, B: 0x1c, A: 1}
+)
+
+// windowAppearance returns the initial window options for a theme.
+func windowAppearance(theme string) (*options.RGBA, *mac.Options, *windows.Options) {
+	switch theme {
+	case appearance.Dark:
+		return darkBackground, &mac.Options{Appearance: mac.NSAppearanceNameDarkAqua}, &windows.Options{Theme: windows.Dark}
+	case appearance.Light:
+		return lightBackground, &mac.Options{Appearance: mac.NSAppearanceNameAqua}, &windows.Options{Theme: windows.Light}
+	default:
+		return lightBackground, &mac.Options{}, &windows.Options{Theme: windows.SystemDefault}
+	}
+}
+
+// applyTheme switches native window chrome to match the theme. Wails'
+// WindowSet*Theme only works on Windows, so macOS uses the appearance package.
+func applyTheme(ctx context.Context, theme string) {
+	appearance.Apply(theme)
+	switch theme {
+	case appearance.Dark:
+		runtime.WindowSetDarkTheme(ctx)
+	case appearance.Light:
+		runtime.WindowSetLightTheme(ctx)
+	default:
+		runtime.WindowSetSystemDefaultTheme(ctx)
+	}
+}
+
+// GetSettings returns the saved preferences.
+func (a *App) GetSettings() Settings {
+	a.settingsLock.Lock()
+	defer a.settingsLock.Unlock()
+	return a.settings
+}
+
+// SetTheme saves and applies "system", "light" or "dark".
+func (a *App) SetTheme(theme string) error {
+	if !appearance.Valid(theme) {
+		return fmt.Errorf("unknown theme %q", theme)
+	}
+	a.settingsLock.Lock()
+	next := a.settings
+	next.Theme = theme
+	err := next.save(a.dataDir)
+	if err == nil {
+		a.settings = next
+	}
+	a.settingsLock.Unlock()
+	if err != nil {
+		return errors.New("couldn't save the setting: " + err.Error())
+	}
+	applyTheme(a.ctx, theme)
+	return nil
+}
