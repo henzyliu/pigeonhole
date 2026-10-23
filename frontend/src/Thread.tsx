@@ -1,5 +1,5 @@
 import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
-import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
+import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
 import NetworkIcon from './NetworkIcon';
 
@@ -324,7 +324,12 @@ function MessageBody({msg}: {msg: inbox.Message}) {
 
 const URL_RE = /(https?:\/\/[^\s]+)/g;
 
+// Links open in the default browser. A plain target="_blank" link does
+// nothing in the Mac webview and opens a bare Edge window on Windows.
 function linkify(text: string) {
     return text.split(URL_RE).map((part, i) =>
-        i % 2 === 1 ? <a key={i} href={part} target="_blank" rel="noreferrer">{part}</a> : part);
+        i % 2 === 1 ? <a key={i} href={part} onClick={e => {
+            e.preventDefault();
+            BrowserOpenURL(part);
+        }}>{part}</a> : part);
 }
