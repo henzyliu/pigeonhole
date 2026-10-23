@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/mautrix-meta/pkg/connector"
@@ -49,7 +50,11 @@ type Service struct {
 
 	lock   sync.Mutex
 	logins map[string]*pendingLogin
-	states map[string]status.BridgeState
+
+	backfillLock sync.Mutex
+	// backfillEnsured remembers chats already given a history task this run.
+	backfillEnsured map[string]bool
+	states          map[string]status.BridgeState
 }
 
 func New(dataDir string, log zerolog.Logger) (*Service, error) {
@@ -174,6 +179,7 @@ func (s *Service) Start(ctx context.Context) error {
 			s.Log.Warn().Err(err).Str("network", netID).Msg("Failed to queue history backfill")
 		}
 	}
+	go s.backfillCheckLoop(ctx)
 	s.emit("inbox:accounts", nil)
 	return nil
 }
@@ -189,6 +195,11 @@ func (s *Service) queueMissingBackfill(ctx context.Context, n *Network) error {
 		return err
 	}
 	queued := 0
+	s.backfillLock.Lock()
+	defer s.backfillLock.Unlock()
+	if s.backfillEnsured == nil {
+		s.backfillEnsured = make(map[string]bool)
+	}
 	for _, login := range user.GetUserLogins() {
 		userPortals, err := n.Bridge.DB.UserPortal.GetAllForLogin(ctx, login.UserLogin)
 		if err != nil {
@@ -201,9 +212,17 @@ func (s *Service) queueMissingBackfill(ctx context.Context, n *Network) error {
 			} else if portal == nil || portal.MXID == "" || portal.RoomType == database.RoomTypeSpace {
 				continue
 			}
+			key := n.ID + "/" + string(login.ID) + "/" + string(portal.ID) + "/" + string(portal.Receiver)
+			if s.backfillEnsured[key] {
+				continue
+			}
 			if err = n.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, login.ID); err != nil {
 				return err
 			}
+			if err = s.prioritizeIfEmpty(ctx, n, portal.PortalKey, portal.MXID); err != nil {
+				return err
+			}
+			s.backfillEnsured[key] = true
 			queued++
 		}
 	}
@@ -212,6 +231,54 @@ func (s *Service) queueMissingBackfill(ctx context.Context, n *Network) error {
 		n.Bridge.WakeupBackfillQueue()
 	}
 	return nil
+}
+
+// prioritizeIfEmpty moves a chat to the front of the backfill queue if it has
+// no messages at all yet and its task hasn't started. The queue serves the
+// longest-waiting task first, so otherwise chats that already show recent
+// messages (from the initial sync) can hold up chats that show nothing, like
+// Messenger's encrypted personal chats, whose history only comes from here.
+func (s *Service) prioritizeIfEmpty(ctx context.Context, n *Network, key networkid.PortalKey, roomID id.RoomID) error {
+	var hasMessages bool
+	err := s.Store.DB.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM events WHERE room_id=?)", roomID).Scan(&hasMessages)
+	if err != nil || hasMessages {
+		return err
+	}
+	task, err := n.Bridge.DB.BackfillTask.GetNextForPortal(ctx, key, false)
+	if err != nil || task == nil || task.BatchCount > 0 || !task.DispatchedAt.IsZero() {
+		return err
+	}
+	task.NextDispatchMinTS = time.Unix(0, 0)
+	return n.Bridge.DB.BackfillTask.Upsert(ctx, task)
+}
+
+// backfillCheckInterval is how often chats created since the last check (by a
+// new login, thread paging, or a new conversation) get a history task.
+const backfillCheckInterval = 2 * time.Minute
+
+// backfillCheckLoop re-runs queueMissingBackfill periodically. Chats can
+// appear well after startup: a new login syncs its chat list in the
+// background, and Messenger only queues encrypted history for chats that
+// already exist when the PIN is entered.
+func (s *Service) backfillCheckLoop(ctx context.Context) {
+	ticker := time.NewTicker(backfillCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.queueMissingBackfillEverywhere(ctx)
+		}
+	}
+}
+
+func (s *Service) queueMissingBackfillEverywhere(ctx context.Context) {
+	for _, netID := range s.order {
+		if err := s.queueMissingBackfill(ctx, s.networks[netID]); err != nil {
+			s.Log.Warn().Err(err).Str("network", netID).Msg("Failed to queue history backfill")
+		}
+	}
 }
 
 func (s *Service) Stop() {

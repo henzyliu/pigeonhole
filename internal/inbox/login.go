@@ -181,6 +181,10 @@ func needsEmbeddedBrowser(params *bridgev2.LoginCookiesParams) bool {
 	return false
 }
 
+// postLoginBackfillDelay gives a new login's chat-list paging time to finish
+// (about 10 seconds in practice) before queueing history for its chats.
+const postLoginBackfillDelay = 45 * time.Second
+
 var errUnsupportedStep = errors.New("this login step isn't supported, please try a different sign-in method")
 
 func mapKeys(m map[string]string) []string {
@@ -299,6 +303,20 @@ func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev
 	s.lock.Lock()
 	if step.Type == bridgev2.LoginStepTypeComplete {
 		delete(s.logins, sessionID)
+		// A new login syncs its chat list in the background for a little
+		// while; queue history for those chats once that has had time to run
+		// (the periodic check catches anything later).
+		if n, ok := s.networks[pending.network]; ok {
+			go func() {
+				select {
+				case <-time.After(postLoginBackfillDelay):
+					if err := s.queueMissingBackfill(s.ctx, n); err != nil {
+						s.Log.Warn().Err(err).Str("network", n.ID).Msg("Failed to queue history backfill after login")
+					}
+				case <-s.ctx.Done():
+				}
+			}()
+		}
 	} else {
 		s.logins[sessionID] = pending
 	}
