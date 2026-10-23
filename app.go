@@ -180,6 +180,12 @@ func (a *App) React(roomID, eventID, key string) error {
 
 func (a *App) MarkRead(roomID string) error { return a.svc.MarkRead(a.ctx, roomID) }
 
+// SetChatHidden hides a chat from the list (until a new message arrives) or
+// brings it back.
+func (a *App) SetChatHidden(roomID string, hidden bool) error {
+	return a.svc.SetHidden(a.ctx, roomID, hidden)
+}
+
 func (a *App) SearchPeople(query string) ([]inbox.Person, error) {
 	return a.svc.SearchPeople(a.ctx, query)
 }

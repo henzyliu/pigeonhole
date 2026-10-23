@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS rooms (
 	last_ts     INTEGER NOT NULL DEFAULT 0,
 	preview     TEXT NOT NULL DEFAULT '',
 	unread      INTEGER NOT NULL DEFAULT 0,
-	muted_until INTEGER NOT NULL DEFAULT 0
+	muted_until INTEGER NOT NULL DEFAULT 0,
+	-- hidden_ts is last_ts when the user hid the chat (0 = not hidden).
+	hidden_ts   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS members (
 	room_id    TEXT NOT NULL,
@@ -116,6 +118,9 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 	}
 	if _, err = db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
+	}
+	if err = addColumn(db, "rooms", "hidden_ts", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return nil, fmt.Errorf("failed to add hidden chats: %w", err)
 	}
 	if err = relativizeMediaPaths(db); err != nil {
 		return nil, fmt.Errorf("failed to fix media paths: %w", err)
@@ -418,6 +423,26 @@ func (s *Store) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) e
 	return err
 }
 
+// SetHidden hides a chat from the main list, or brings it back. A hidden
+// chat only stays hidden until a newer message arrives (see HiddenClause).
+func (s *Store) SetHidden(ctx context.Context, roomID id.RoomID, hidden bool) error {
+	q := "UPDATE rooms SET hidden_ts=0 WHERE room_id=?"
+	if hidden {
+		// MAX(…, 1) so a chat with no messages yet still counts as hidden.
+		q = "UPDATE rooms SET hidden_ts=MAX(last_ts, 1) WHERE room_id=?"
+	}
+	_, err := s.DB.ExecContext(ctx, q, roomID)
+	if err == nil {
+		s.notify("rooms", roomID)
+	}
+	return err
+}
+
+// HiddenClause is the SQL condition for a hidden chat: hidden, and nothing
+// newer than when it was hidden. A new message raises last_ts past
+// hidden_ts, which brings the chat back without any extra bookkeeping.
+const HiddenClause = "(hidden_ts > 0 AND last_ts <= hidden_ts)"
+
 func (s *Store) Mute(ctx context.Context, roomID id.RoomID, until time.Time) error {
 	ts := int64(0)
 	if !until.IsZero() {
@@ -461,6 +486,28 @@ func (s *Store) MediaPath(ctx context.Context, mxc id.ContentURIString) (path, m
 	var name string
 	err = s.DB.QueryRowContext(ctx, "SELECT path, mime FROM media WHERE mxc=?", mxc).Scan(&name, &mime)
 	return filepath.Join(s.MediaDir, filepath.Base(name)), mime, err
+}
+
+// addColumn adds a column to a table created by an older version of the app.
+func addColumn(db *sql.DB, table, column, definition string) error {
+	rows, err := db.Query("SELECT name FROM pragma_table_info(?)", table)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err = rows.Scan(&name); err != nil {
+			return err
+		} else if name == column {
+			return nil
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
+	return err
 }
 
 // relativizeMediaPaths rewrites media rows saved with absolute paths (before

@@ -25,6 +25,8 @@ export default function App() {
     const [selected, setSelected] = useState<string>('');
     const [filter, setFilter] = useState<Filter>('all');
     const [category, setCategory] = useState<Category>('inbox');
+    // Shows hidden chats instead of the tabs.
+    const [showHidden, setShowHidden] = useState(false);
     const [query, setQuery] = useState('');
     const [showAccounts, setShowAccounts] = useState(false);
     const [showNewChat, setShowNewChat] = useState(false);
@@ -52,6 +54,7 @@ export default function App() {
     const showChat = useCallback((roomId: string, list: inbox.Chat[]) => {
         const chat = list.find(c => c.roomId === roomId);
         setCategory((chat?.category as Category) || 'inbox');
+        setShowHidden(!!chat?.hidden);
         setFilter('all');
         setQuery('');
         setSelected(roomId);
@@ -120,6 +123,7 @@ export default function App() {
             marketplace: {total: 0, unread: 0}, requests: {total: 0, unread: 0},
         };
         for (const c of chats) {
+            if (c.hidden) continue;
             const s = stats[(c.category as Category) || 'inbox'] ?? stats.inbox;
             s.total++;
             if (c.unread > 0) s.unread++;
@@ -136,21 +140,38 @@ export default function App() {
         if (!tab?.alwaysShown && categoryStats[category].total === 0) setCategory('inbox');
     }, [category, categoryStats]);
 
+    const hiddenCount = useMemo(() => chats.filter(c => c.hidden).length, [chats]);
+
+    // Leave the hidden view once it's empty (e.g. after unhiding the last chat).
+    useEffect(() => {
+        if (showHidden && hiddenCount === 0) setShowHidden(false);
+    }, [showHidden, hiddenCount]);
+
     const visibleChats = useMemo(() => {
         const q = query.trim().toLowerCase();
         return chats.filter(c => {
-            // Search looks across every category so nothing is hidden by the tabs.
-            if (!q && (c.category || 'inbox') !== category) return false;
+            // Search looks across every category, hidden chats included, so
+            // nothing is out of reach.
+            if (!q && showHidden !== c.hidden) return false;
+            if (!q && !showHidden && (c.category || 'inbox') !== category) return false;
             if (filter === 'unread' && c.unread === 0) return false;
             if (filter !== 'all' && filter !== 'unread' && c.network !== filter) return false;
             return !q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q);
         });
-    }, [chats, category, filter, query]);
+    }, [chats, category, filter, query, showHidden]);
 
     const selectedChat = chats.find(c => c.roomId === selected);
-    const totalUnread = categoryStats[category].unread;
+    const totalUnread = showHidden ? chats.filter(c => c.hidden && c.unread > 0).length : categoryStats[category].unread;
+
+    // Hiding the open chat closes it, since it leaves the list you're looking at.
+    const setChatHidden = async (roomId: string, hidden: boolean) => {
+        await Go.SetChatHidden(roomId, hidden);
+        setSelected('');
+        loadChats();
+    };
     const emptyText = accounts.length === 0
         ? 'Connect an account to get started.'
+        : showHidden ? 'No hidden chats.'
         : category === 'requests' ? 'No message requests.'
             : category === 'marketplace' ? 'No Marketplace conversations.'
                 : category === 'groups' ? 'No group chats yet.'
@@ -192,7 +213,13 @@ export default function App() {
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                 />
-                {!query.trim() && category !== 'requests' && (
+                {!query.trim() && showHidden && (
+                    <button className="requests-row" onClick={() => setShowHidden(false)}>
+                        <span>← Back to chats</span>
+                        <span className="muted">Hidden chats</span>
+                    </button>
+                )}
+                {!query.trim() && !showHidden && category !== 'requests' && (
                     <div className="tabs" role="tablist">
                         {tabs.map(t => (
                             <button key={t.id} role="tab" aria-selected={category === t.id}
@@ -204,7 +231,7 @@ export default function App() {
                         ))}
                     </div>
                 )}
-                {!query.trim() && categoryStats.requests.total > 0 && (
+                {!query.trim() && !showHidden && categoryStats.requests.total > 0 && (
                     category === 'requests'
                         ? <button className="requests-row" onClick={() => setCategory('inbox')}>
                             <span>← Back to chats</span>
@@ -230,10 +257,20 @@ export default function App() {
                 </div>
                 {startError && <div className="banner error">{startError}</div>}
                 <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}/>
+                {!query.trim() && !showHidden && hiddenCount > 0 && (
+                    <button className="requests-row hidden-row" onClick={() => {
+                        setShowHidden(true);
+                        setFilter('all');
+                    }}>
+                        <span className="muted">Hidden chats</span>
+                        <span className="muted">{hiddenCount}</span>
+                    </button>
+                )}
             </aside>
             <main className="main">
                 {selectedChat
-                    ? <Thread key={selectedChat.roomId} chat={selectedChat} tick={messageTick}/>
+                    ? <Thread key={selectedChat.roomId} chat={selectedChat} tick={messageTick}
+                              onSetHidden={hidden => setChatHidden(selectedChat.roomId, hidden)}/>
                     : <div className="empty-thread">
                         <p>Select a conversation</p>
                         {accounts.length === 0 &&

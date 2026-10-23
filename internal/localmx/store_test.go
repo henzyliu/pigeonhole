@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -120,5 +121,74 @@ func TestDeleteRoomCleansUp(t *testing.T) {
 		if !exists(kept) {
 			t.Errorf("%s should have been kept", kept)
 		}
+	}
+}
+
+// A hidden chat stays hidden through older history loading in, and comes
+// back by itself when a new message arrives.
+func TestHiddenChatReturnsOnNewMessage(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(t.TempDir(), "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if err = store.CreateRoom(ctx, "!a:local", "discord", true, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	send := func(eventID id.EventID, ts int64) {
+		evt := &event.Event{ID: eventID, RoomID: "!a:local", Sender: "@friend:local", Type: event.EventMessage, Timestamp: ts,
+			Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "hi"}}}
+		if err := store.HandleEvent(ctx, evt, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hidden := func() (h bool) {
+		if err := store.DB.QueryRow("SELECT "+HiddenClause+" FROM rooms WHERE room_id='!a:local'").Scan(&h); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	send("$1", 100)
+	if err = store.SetHidden(ctx, "!a:local", true); err != nil {
+		t.Fatal(err)
+	} else if !hidden() {
+		t.Fatal("chat should be hidden")
+	}
+	send("$0", 50) // older history
+	if !hidden() {
+		t.Fatal("older history shouldn't unhide the chat")
+	}
+	send("$2", 200)
+	if hidden() {
+		t.Fatal("a new message should unhide the chat")
+	}
+	if err = store.SetHidden(ctx, "!a:local", true); err != nil {
+		t.Fatal(err)
+	} else if err = store.SetHidden(ctx, "!a:local", false); err != nil {
+		t.Fatal(err)
+	} else if hidden() {
+		t.Fatal("unhiding should show the chat")
+	}
+}
+
+// Databases from before hiding existed get the column added on open.
+func TestHiddenColumnAddedToOldDatabase(t *testing.T) {
+	dir := t.TempDir()
+	store, err := OpenStore(dir, "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.DB.Exec("ALTER TABLE rooms DROP COLUMN hidden_ts"); err != nil {
+		t.Fatal(err)
+	}
+	store.DB.Close()
+	if store, err = OpenStore(dir, "@me:local"); err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if _, err = store.DB.Exec("SELECT hidden_ts FROM rooms"); err != nil {
+		t.Fatal(err)
 	}
 }

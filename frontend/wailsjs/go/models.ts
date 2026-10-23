@@ -32,6 +32,7 @@ export namespace inbox {
 	    unread: number;
 	    isDm: boolean;
 	    category: string;
+	    hidden: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -48,6 +49,7 @@ export namespace inbox {
 	        this.unread = source["unread"];
 	        this.isDm = source["isDm"];
 	        this.category = source["category"];
+	        this.hidden = source["hidden"];
 	    }
 	}
 	export class LoginField {

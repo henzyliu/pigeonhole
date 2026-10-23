@@ -6,7 +6,7 @@ import NetworkIcon from './NetworkIcon';
 const PAGE = 50;
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👍'];
 
-export default function Thread(props: {chat: inbox.Chat; tick: number}) {
+export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidden: (hidden: boolean) => Promise<void>}) {
     const {chat} = props;
     const [messages, setMessages] = useState<inbox.Message[]>([]);
     const [draft, setDraft] = useState('');
@@ -121,6 +121,11 @@ export default function Thread(props: {chat: inbox.Chat; tick: number}) {
                     <div className="thread-title">{chat.name}</div>
                     <div className="thread-subtitle"><NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}</div>
                 </div>
+                <button className="link thread-hide"
+                        title={chat.hidden ? 'Move this chat back to your chat list' : 'Hide this chat until a new message arrives. Only in Pigeonhole.'}
+                        onClick={() => props.onSetHidden(!chat.hidden).catch(e => setError(errorText(e)))}>
+                    {chat.hidden ? 'Unhide' : 'Hide chat'}
+                </button>
             </header>
             <div className="messages" ref={scroller} onScroll={onScroll}>
                 {messages.map((m, i) => {

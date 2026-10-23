@@ -30,6 +30,8 @@ type Chat struct {
 	IsDM    bool   `json:"isDm"`
 	// Category is "inbox" (one-to-one), "groups", "marketplace" or "requests".
 	Category string `json:"category"`
+	// Hidden chats are listed separately until a new message arrives.
+	Hidden bool `json:"hidden"`
 }
 
 type Reaction struct {
@@ -124,7 +126,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		return nil, err
 	}
 	rows, err := s.Store.DB.QueryContext(ctx, `
-		SELECT room_id, network, name, avatar, preview, last_ts, unread, is_dm
+		SELECT room_id, network, name, avatar, preview, last_ts, unread, is_dm, `+localmx.HiddenClause+`
 		FROM rooms WHERE is_portal=1 ORDER BY last_ts DESC`)
 	if err != nil {
 		return nil, err
@@ -133,7 +135,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 	for rows.Next() {
 		var c Chat
 		var avatar string
-		if err = rows.Scan(&c.RoomID, &c.Network, &c.Name, &avatar, &c.Preview, &c.LastTS, &c.Unread, &c.IsDM); err != nil {
+		if err = rows.Scan(&c.RoomID, &c.Network, &c.Name, &avatar, &c.Preview, &c.LastTS, &c.Unread, &c.IsDM, &c.Hidden); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -426,6 +428,11 @@ func (s *Service) React(ctx context.Context, roomID, eventID, key string) error 
 	return s.sendLocal(ctx, roomID, event.EventReaction, &event.ReactionEventContent{
 		RelatesTo: event.RelatesTo{Type: event.RelAnnotation, EventID: id.EventID(eventID), Key: key},
 	})
+}
+
+// SetHidden hides a chat in Pigeonhole only; nothing changes on the network.
+func (s *Service) SetHidden(ctx context.Context, roomID string, hidden bool) error {
+	return s.Store.SetHidden(ctx, id.RoomID(roomID), hidden)
 }
 
 func (s *Service) MarkRead(ctx context.Context, roomID string) error {
