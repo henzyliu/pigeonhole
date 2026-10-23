@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -39,9 +40,12 @@ type LoginStep struct {
 	Fields       []LoginField `json:"fields"`
 	CookieURL    string       `json:"cookieUrl"`
 	CookieNames  []string     `json:"cookieNames"`
-	DisplayType  string       `json:"displayType"`
-	DisplayData  string       `json:"displayData"`
-	AccountID    string       `json:"accountId"`
+	// NeedsBrowser is set for cookie steps that can only be completed inside an
+	// embedded browser (e.g. Instagram's CAPTCHA), which Pigeonhole doesn't have.
+	NeedsBrowser bool   `json:"needsBrowser"`
+	DisplayType  string `json:"displayType"`
+	DisplayData  string `json:"displayData"`
+	AccountID    string `json:"accountId"`
 }
 
 type Account struct {
@@ -90,10 +94,12 @@ func (s *Service) StartLogin(netID, flowID string) (*LoginStep, error) {
 	}
 	process, err := n.Bridge.Network.CreateLogin(s.ctx, user, flowID)
 	if err != nil {
+		s.Log.Warn().Err(err).Str("network", netID).Str("flow", flowID).Msg("Failed to create login")
 		return nil, err
 	}
 	step, err := process.Start(s.ctx)
 	if err != nil {
+		s.Log.Warn().Err(err).Str("network", netID).Str("flow", flowID).Msg("Failed to start login")
 		process.Cancel()
 		return nil, err
 	}
@@ -108,29 +114,78 @@ func (s *Service) SubmitLogin(sessionID string, values map[string]string) (*Logi
 	pending, ok := s.logins[sessionID]
 	s.lock.Unlock()
 	if !ok {
+		s.Log.Warn().Str("session", sessionID).Msg("Login submit for unknown or expired session")
 		return nil, fmt.Errorf("login session expired, please start again")
 	}
+	// Only names are logged: values are passwords, codes or session cookies.
+	log := s.Log.With().Str("network", pending.network).Str("step_type", string(pending.step.Type)).
+		Str("step_id", pending.step.StepID).Logger()
 	var step *bridgev2.LoginStep
 	var err error
 	switch pending.step.Type {
 	case bridgev2.LoginStepTypeUserInput:
-		if err = validateFields(pending.step.UserInputParams.Fields, values); err == nil {
-			step, err = pending.process.(bridgev2.LoginProcessUserInput).SubmitUserInput(s.ctx, values)
+		log.Info().Strs("fields", mapKeys(values)).Msg("Submitting login step")
+		if proc, ok := pending.process.(bridgev2.LoginProcessUserInput); !ok {
+			err = errUnsupportedStep
+		} else if err = validateFields(pending.step.UserInputParams.Fields, values); err == nil {
+			step, err = proc.SubmitUserInput(s.ctx, values)
 		}
 	case bridgev2.LoginStepTypeCookies:
 		var cookies map[string]string
 		if cookies, err = ParseCookies(values["cookies"]); err == nil {
-			step, err = pending.process.(bridgev2.LoginProcessCookies).SubmitCookies(s.ctx, cookies)
+			log.Info().Strs("cookie_names", mapKeys(cookies)).Msg("Submitting login cookies")
+			if proc, ok := pending.process.(bridgev2.LoginProcessCookies); !ok {
+				err = errUnsupportedStep
+			} else {
+				step, err = proc.SubmitCookies(s.ctx, cookies)
+			}
 		}
 	case bridgev2.LoginStepTypeDisplayAndWait:
-		step, err = pending.process.(bridgev2.LoginProcessDisplayAndWait).Wait(s.ctx)
+		if proc, ok := pending.process.(bridgev2.LoginProcessDisplayAndWait); !ok {
+			err = errUnsupportedStep
+		} else {
+			step, err = proc.Wait(s.ctx)
+		}
 	default:
 		err = fmt.Errorf("unsupported login step %q", pending.step.Type)
 	}
 	if err != nil {
+		log.Warn().Err(err).Msg("Login step failed")
 		return nil, err
 	}
 	return s.advance(sessionID, pending, step), nil
+}
+
+// needsEmbeddedBrowser reports whether a cookie step has a required value
+// that can't be pasted: one only produced by "special" client-side handling,
+// like the token from Instagram's CAPTCHA script.
+func needsEmbeddedBrowser(params *bridgev2.LoginCookiesParams) bool {
+	for _, f := range params.Fields {
+		if !f.Required || len(f.Sources) == 0 {
+			continue
+		}
+		pasteable := false
+		for _, src := range f.Sources {
+			if src.Type != bridgev2.LoginCookieTypeSpecial {
+				pasteable = true
+			}
+		}
+		if !pasteable {
+			return true
+		}
+	}
+	return false
+}
+
+var errUnsupportedStep = errors.New("this login step isn't supported, please try a different sign-in method")
+
+func mapKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 // validateFields applies each field's own validation (which may also
@@ -170,6 +225,8 @@ func (s *Service) CancelLogin(sessionID string) {
 }
 
 func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev2.LoginStep) *LoginStep {
+	s.Log.Info().Str("network", pending.network).Str("step_type", string(step.Type)).
+		Str("step_id", step.StepID).Str("instructions", step.Instructions).Msg("Login step")
 	pending.step = step
 	s.lock.Lock()
 	if step.Type == bridgev2.LoginStepTypeComplete {
@@ -193,6 +250,7 @@ func (s *Service) advance(sessionID string, pending *pendingLogin, step *bridgev
 		for _, f := range step.CookiesParams.Fields {
 			out.CookieNames = append(out.CookieNames, f.ID)
 		}
+		out.NeedsBrowser = needsEmbeddedBrowser(step.CookiesParams)
 	case step.DisplayAndWaitParams != nil:
 		out.DisplayType = string(step.DisplayAndWaitParams.Type)
 		out.DisplayData = step.DisplayAndWaitParams.Data

@@ -280,3 +280,24 @@ func TestDeliveryStatus(t *testing.T) {
 		t.Fatalf("a late success shouldn't downgrade delivered, got %q", st)
 	}
 }
+
+// Steps whose required value only comes from client-side "special" handling
+// (Instagram's CAPTCHA token) can't be pasted, so the UI must say so.
+func TestNeedsEmbeddedBrowser(t *testing.T) {
+	cookie := bridgev2.LoginCookieFieldSource{Type: bridgev2.LoginCookieTypeCookie, Name: "sessionid"}
+	special := bridgev2.LoginCookieFieldSource{Type: bridgev2.LoginCookieTypeSpecial, Name: "captcha_token"}
+	cases := []struct {
+		name   string
+		fields []bridgev2.LoginCookieField
+		want   bool
+	}{
+		{"cookies", []bridgev2.LoginCookieField{{ID: "sessionid", Required: true, Sources: []bridgev2.LoginCookieFieldSource{cookie}}}, false},
+		{"captcha", []bridgev2.LoginCookieField{{ID: "captcha_token", Required: true, Sources: []bridgev2.LoginCookieFieldSource{special}}}, true},
+		{"optional special", []bridgev2.LoginCookieField{{ID: "x", Sources: []bridgev2.LoginCookieFieldSource{special}}}, false},
+	}
+	for _, c := range cases {
+		if got := needsEmbeddedBrowser(&bridgev2.LoginCookiesParams{Fields: c.fields}); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}

@@ -1,4 +1,4 @@
-import {FormEvent, useEffect, useState} from 'react';
+import {FormEvent, useEffect, useRef, useState} from 'react';
 import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS} from './api';
 import NetworkIcon from './NetworkIcon';
 
@@ -8,8 +8,13 @@ type View =
     | {kind: 'step'; step: inbox.LoginStep}
     | {kind: 'done'; network: string};
 
-// Recommended flows first: password login is the least fiddly for most people.
-const FLOW_ORDER = ['messenger-lite', 'instagram-password', 'android', 'messenger-lite-android', 'messenger', 'instagram', 'facebook'];
+// Sign-in methods in recommended order (each network's first one gets the
+// Recommended badge). For Instagram, cookies come first: password login from
+// a "new device" tends to hit a CAPTCHA that needs a built-in browser.
+const FLOW_ORDER = [
+    'messenger-lite', 'messenger-lite-android', 'messenger', 'facebook',
+    'instagram', 'instagram-password', 'android',
+];
 
 export default function Accounts(props: {accounts: inbox.Account[]; onClose: () => void}) {
     const [view, setView] = useState<View>({kind: 'list'});
@@ -71,7 +76,8 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                     <h2>{view.kind === 'list' ? 'Accounts' : `Connect ${NETWORK_LABELS[networkOf(view)] ?? ''}`}</h2>
                     <button className="icon-button" onClick={close}>✕</button>
                 </div>
-                {error && <div className="banner error">{error}</div>}
+                {/* On login steps the error shows next to Continue instead (see StepForm). */}
+                {error && view.kind !== 'step' && <div className="banner error">{error}</div>}
 
                 {view.kind === 'list' && <>
                     {props.accounts.length > 0 && (
@@ -116,8 +122,12 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                     <button className="link" onClick={() => setView({kind: 'list'})}>← Back</button>
                 </>}
 
-                {view.kind === 'step' && <StepForm key={stepKey(view.step)} step={view.step} busy={busy}
-                                                   onSubmit={v => submit(view.step, v)}/>}
+                {view.kind === 'step' && <StepForm key={stepKey(view.step)} step={view.step} busy={busy} error={error}
+                                                   onSubmit={v => submit(view.step, v)}
+                                                   onChooseOther={() => {
+                                                       Go.CancelLogin(view.step.sessionId);
+                                                       pickNetwork(view.step.network);
+                                                   }}/>}
 
                 {view.kind === 'done' && <>
                     <p>Connected! Your conversations will start appearing in a moment.</p>
@@ -168,8 +178,21 @@ function stateLabel(a: inbox.Account): string {
     }
 }
 
-function StepForm(props: {step: inbox.LoginStep; busy: boolean; onSubmit: (values: Record<string, string>) => void}) {
+function StepForm(props: {
+    step: inbox.LoginStep;
+    busy: boolean;
+    error: string;
+    onSubmit: (values: Record<string, string>) => void;
+    onChooseOther: () => void;
+}) {
     const {step} = props;
+    // Errors sit right above Continue and scroll into view, since long steps
+    // (like pasting cookies) push the top of the dialog off-screen.
+    const errorRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (props.error) errorRef.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    }, [props.error]);
+    const errorBanner = props.error ? <div ref={errorRef} className="banner error">{props.error}</div> : null;
     const [values, setValues] = useState<Record<string, string>>(() =>
         Object.fromEntries((step.fields ?? []).map(f => [f.id, f.default || f.options?.[0] || ''])));
 
@@ -178,24 +201,43 @@ function StepForm(props: {step: inbox.LoginStep; busy: boolean; onSubmit: (value
         props.onSubmit(values);
     };
 
+    // Some steps (like Instagram's CAPTCHA) only work inside an embedded
+    // browser. Pasting can't satisfy them, so explain and offer a way out.
+    if (step.type === 'cookies' && step.needsBrowser) {
+        return <div className="step">
+            {step.instructions && <p className="muted">{NETWORK_LABELS[step.network] ?? step.network} says: “{step.instructions}”</p>}
+            <p>
+                This check needs a built-in browser, which Pigeonhole doesn't have yet, so it can't be
+                finished here. Instead, log in on the website in your own browser and use the
+                <strong> Cookies</strong> sign-in option to bring that login across.
+            </p>
+            <div className="modal-actions">
+                <button className="primary" onClick={props.onChooseOther}>Choose another sign-in method</button>
+            </div>
+        </div>;
+    }
+
     if (step.type === 'display_and_wait') {
         return <div className="step">
             <p>{step.instructions}</p>
             {step.displayData && step.displayType !== 'nothing' && <pre className="code-display">{step.displayData}</pre>}
             <p className="muted">Waiting…</p>
+            {errorBanner}
         </div>;
     }
 
     return (
         <form className="step" onSubmit={onSubmit}>
             {step.type === 'cookies' ? <>
+                {step.instructions && <p>{step.instructions}</p>}
                 <ol className="instructions">
                     <li>Open <button type="button" className="link" onClick={() => BrowserOpenURL(step.cookieUrl)}>{step.cookieUrl}</button> in your browser and log in.</li>
-                    <li>Open developer tools (⌥⌘I on Mac, F12 on Windows) → Network tab, and reload the page.</li>
-                    <li>Right-click the first request → Copy → <strong>Copy as cURL</strong>, and paste it below.</li>
+                    <li>Open developer tools (⌥⌘I on Mac, F12 on Windows) → Network tab, then reload the page.</li>
+                    <li>Click the first request and copy the value of the <strong>cookie</strong> request header
+                        (or right-click it → Copy → <strong>Copy as cURL</strong>), and paste it below.</li>
                 </ol>
                 <p className="muted">Needed cookies: {(step.cookieNames ?? []).join(', ')}</p>
-                <textarea className="cookie-input" rows={6} placeholder="curl 'https://…' -H 'cookie: …'"
+                <textarea className="cookie-input" rows={6} placeholder="name=value; name=value…  or a curl command"
                           value={values.cookies ?? ''} onChange={e => setValues({cookies: e.target.value})} autoFocus/>
             </> : <>
                 {step.instructions && <p>{step.instructions}</p>}
@@ -222,6 +264,7 @@ function StepForm(props: {step: inbox.LoginStep; busy: boolean; onSubmit: (value
                     </label>
                 ))}
             </>}
+            {errorBanner}
             <div className="modal-actions">
                 <button className="primary" type="submit" disabled={props.busy}>{props.busy ? 'Working…' : 'Continue'}</button>
             </div>

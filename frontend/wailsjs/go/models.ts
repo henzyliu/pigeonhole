@@ -98,6 +98,7 @@ export namespace inbox {
 	    fields: LoginField[];
 	    cookieUrl: string;
 	    cookieNames: string[];
+	    needsBrowser: boolean;
 	    displayType: string;
 	    displayData: string;
 	    accountId: string;
@@ -115,6 +116,7 @@ export namespace inbox {
 	        this.fields = this.convertValues(source["fields"], LoginField);
 	        this.cookieUrl = source["cookieUrl"];
 	        this.cookieNames = source["cookieNames"];
+	        this.needsBrowser = source["needsBrowser"];
 	        this.displayType = source["displayType"];
 	        this.displayData = source["displayData"];
 	        this.accountId = source["accountId"];
