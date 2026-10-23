@@ -26,6 +26,11 @@ hole ends up holding more than one pigeon.
   writes rooms, messages, reactions and media into a local SQLite database instead.
 - **`internal/inbox`**: starts one bridge per network, drives login flows and
   exposes chats/messages/send to the UI.
+- **`internal/loginbrowser`**: the login window. For the bridges' "cookies" login
+  steps, it opens the real website in a private browser window (WebKit on macOS,
+  WebView2 on Windows), lets you log in normally, and collects the cookies or
+  tokens the bridge asked for. The native code only reports what the page holds;
+  deciding when the login is done is shared Go code.
 - **`frontend/`**: React + TypeScript UI, talking to Go through Wails bindings.
 - **`third_party/mautrix-meta`**: a local copy of mautrix-meta with small patches
   (wired in via a `replace` in `go.mod`). Currently: the thread backfill also pages
@@ -66,8 +71,16 @@ go test . ./internal/...
 wails build -clean
 ```
 
-This produces `build/bin/Pigeonhole.app` on macOS. SQLite uses cgo, so each OS
-is easiest to build on itself. The GitHub Actions workflow in
+This produces `build/bin/Pigeonhole.app` on macOS. SQLite uses cgo, so a Windows
+build from a Mac needs the MinGW cross-compiler (`brew install mingw-w64`):
+
+```bash
+CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
+  wails build -platform windows/amd64 -o Pigeonhole.exe
+```
+
+The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
+10 and 11 (plus WebView2, which they include). The GitHub Actions workflow in
 `.github/workflows/build.yml` builds the macOS app and a Windows installer
 (`-nsis`) when you push a `v*` tag or run it manually.
 
@@ -76,9 +89,10 @@ is easiest to build on itself. The GitHub Actions workflow in
 - Logging in uses Meta's private web/mobile APIs, the same way the mautrix
   bridges and Beeper do. This is against Meta's terms. Meta may ask you to verify
   a login, and there's a small risk of an account being flagged.
-- For Messenger, the messenger.com cookie login is the most reliable: log in on
-  the website, then paste a "Copy as cURL" request from the browser's devtools.
-  Password login from a new "device" can push Meta into account-recovery checks.
+- The login window is the most reliable way to sign in: password login from a
+  new "device" can push Meta into account-recovery checks. For Messenger it uses
+  facebook.com, since messenger.com hands logins back via cross-site cookies that
+  WebKit blocks. Pasting cookies from your own browser still works as a fallback.
 - Messenger chats that *started* end-to-end encrypted aren't in any thread list
   the bridge can read; they appear once a new message arrives in them.
 - The app icon's source is `build/icon/appicon.svg` (a pigeon in a cabinet of

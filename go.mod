@@ -5,10 +5,12 @@ go 1.26.0
 require (
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/rs/zerolog v1.35.1
+	github.com/wailsapp/go-webview2 v1.0.22
 	github.com/wailsapp/wails/v2 v2.17.0
 	go.mau.fi/mautrix-meta v0.2610.0
 	go.mau.fi/util v0.11.0
 	golang.org/x/image v0.47.0
+	golang.org/x/sys v0.49.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mautrix v0.32.0
 )
@@ -69,7 +71,6 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.2.0 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	go.mau.fi/libsignal v0.2.2 // indirect
 	go.mau.fi/whatsmeow v0.0.0-20261014094007-f16f9ca30d6a // indirect
@@ -78,7 +79,6 @@ require (
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
