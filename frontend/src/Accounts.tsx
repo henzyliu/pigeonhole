@@ -9,10 +9,11 @@ type View =
     | {kind: 'done'; network: string};
 
 // Sign-in methods in recommended order (each network's first one gets the
-// Recommended badge). For Instagram, cookies come first: password login from
-// a "new device" tends to hit a CAPTCHA that needs a built-in browser.
+// Recommended badge). Cookie logins come first for both networks: password
+// login from a "new device" tends to trip Meta's checks (Instagram's CAPTCHA
+// needs a built-in browser; Messenger can push it into account recovery).
 const FLOW_ORDER = [
-    'messenger-lite', 'messenger-lite-android', 'messenger', 'facebook',
+    'messenger', 'facebook', 'messenger-lite', 'messenger-lite-android',
     'instagram', 'instagram-password', 'android',
 ];
 
