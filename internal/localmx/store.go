@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -139,17 +140,78 @@ func (s *Store) CreateRoom(ctx context.Context, roomID id.RoomID, network string
 	return err
 }
 
+// mediaURIPattern finds this store's media URIs inside stored event JSON.
+var mediaURIPattern = regexp.MustCompile(`mxc://` + ServerName + `/[A-Za-z0-9_-]+`)
+
+// DeleteRoom removes a chat and everything stored for it: messages,
+// reactions, receipts, and media files no longer used anywhere else.
 func (s *Store) DeleteRoom(ctx context.Context, roomID id.RoomID) error {
+	candidates, err := s.roomMedia(ctx, roomID)
+	if err != nil {
+		return err
+	}
 	for _, q := range []string{
 		"DELETE FROM rooms WHERE room_id=?", "DELETE FROM members WHERE room_id=?",
 		"DELETE FROM events WHERE room_id=?", "DELETE FROM reactions WHERE room_id=?",
+		"DELETE FROM receipts WHERE room_id=?",
 	} {
-		if _, err := s.DB.ExecContext(ctx, q, roomID); err != nil {
+		if _, err = s.DB.ExecContext(ctx, q, roomID); err != nil {
+			return err
+		}
+	}
+	// Only media this room referenced is considered, so files that are still
+	// being uploaded for other chats (not referenced by anything yet) are safe.
+	for mxc := range candidates {
+		if err = s.deleteMediaIfUnused(ctx, mxc); err != nil {
 			return err
 		}
 	}
 	s.notify("rooms", roomID)
 	return nil
+}
+
+// roomMedia lists the media URIs a room's avatar and messages refer to.
+func (s *Store) roomMedia(ctx context.Context, roomID id.RoomID) (map[string]struct{}, error) {
+	found := make(map[string]struct{})
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT content FROM events WHERE room_id=?
+		UNION ALL SELECT avatar FROM rooms WHERE room_id=?`, roomID, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var text string
+		if err = rows.Scan(&text); err != nil {
+			return nil, err
+		}
+		for _, mxc := range mediaURIPattern.FindAllString(text, -1) {
+			found[mxc] = struct{}{}
+		}
+	}
+	return found, rows.Err()
+}
+
+func (s *Store) deleteMediaIfUnused(ctx context.Context, mxc string) error {
+	var used bool
+	err := s.DB.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM rooms WHERE avatar=?)
+		    OR EXISTS (SELECT 1 FROM profiles WHERE avatar=?)
+		    OR EXISTS (SELECT 1 FROM events WHERE instr(content, ?) > 0)`, mxc, mxc, mxc).Scan(&used)
+	if err != nil || used {
+		return err
+	}
+	path, _, err := s.MediaPath(ctx, id.ContentURIString(mxc))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	_, err = s.DB.ExecContext(ctx, "DELETE FROM media WHERE mxc=?", mxc)
+	return err
 }
 
 func (s *Store) SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {

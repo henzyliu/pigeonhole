@@ -94,6 +94,24 @@ func bridgeConfig() *bridgeconfig.BridgeConfig {
 	return &bridgeconfig.BridgeConfig{
 		CommandPrefix:         "!inbox",
 		PrivateChatPortalMeta: true,
+		// Logging out yourself removes that account's chats from this computer
+		// (they stay on the network). Being signed out by the network, e.g. an
+		// expired session, keeps them so reconnecting picks up where it left off.
+		CleanupOnLogout: bridgeconfig.CleanupOnLogouts{
+			Enabled: true,
+			Manual: bridgeconfig.CleanupOnLogout{
+				Private:        bridgeconfig.CleanupActionDelete,
+				Relayed:        bridgeconfig.CleanupActionDelete,
+				SharedNoUsers:  bridgeconfig.CleanupActionDelete,
+				SharedHasUsers: bridgeconfig.CleanupActionDelete,
+			},
+			BadCredentials: bridgeconfig.CleanupOnLogout{
+				Private:        bridgeconfig.CleanupActionNothing,
+				Relayed:        bridgeconfig.CleanupActionNothing,
+				SharedNoUsers:  bridgeconfig.CleanupActionNothing,
+				SharedHasUsers: bridgeconfig.CleanupActionNothing,
+			},
+		},
 		Permissions: bridgeconfig.PermissionConfig{
 			"*": &bridgeconfig.Permissions{SendEvents: true, Commands: true, Login: true, DoublePuppet: true, Admin: true},
 		},

@@ -5,7 +5,8 @@ import NetworkIcon from './NetworkIcon';
 type View =
     | {kind: 'list'}
     | {kind: 'flows'; network: string; flows: inbox.LoginFlow[]}
-    | {kind: 'step'; step: inbox.LoginStep}
+    // flows is the network's full list of sign-in methods, for "Other ways to sign in".
+    | {kind: 'step'; step: inbox.LoginStep; flows?: inbox.LoginFlow[]}
     | {kind: 'done'; network: string};
 
 // Sign-in methods in recommended order (each network's first one gets the
@@ -22,6 +23,8 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
     const [networks, setNetworks] = useState<inbox.LoginFlow[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    // The account whose "Log out" is waiting for confirmation.
+    const [confirmingLogout, setConfirmingLogout] = useState('');
 
     useEffect(() => {
         Go.Networks().then(setNetworks);
@@ -39,21 +42,35 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
         }
     };
 
-    const showStep = (step: inbox.LoginStep) => {
+    // Keeps the list of sign-in methods attached as the login moves through steps.
+    const showStep = (step: inbox.LoginStep, flows?: inbox.LoginFlow[]) => {
         if (step.type === 'complete') {
             setView({kind: 'done', network: step.network});
         } else {
-            setView({kind: 'step', step});
+            setView(v => ({kind: 'step', step, flows: flows ?? (v.kind === 'step' || v.kind === 'flows' ? v.flows : undefined)}));
         }
     };
 
-    const pickNetwork = (network: string) => run(async () => {
+    const loadFlows = async (network: string) => {
         const flows = await Go.LoginFlows(network) ?? [];
-        flows.sort((a, b) => rank(a.id) - rank(b.id));
-        setView({kind: 'flows', network, flows});
+        return flows.sort((a, b) => rank(a.id) - rank(b.id));
+    };
+
+    // Picking a network goes straight to its recommended sign-in (the login
+    // window, for cookie methods); the rest are under "Other ways to sign in".
+    const pickNetwork = (network: string) => run(async () => {
+        const flows = await loadFlows(network);
+        if (flows.length === 0) throw new Error(`No sign-in methods available for ${NETWORK_LABELS[network] ?? network}`);
+        showStep(await Go.StartLogin(network, flows[0].id), flows);
     });
 
-    const startFlow = (network: string, flowID: string) => run(async () => showStep(await Go.StartLogin(network, flowID)));
+    const startFlow = (network: string, flowID: string, flows: inbox.LoginFlow[]) =>
+        run(async () => showStep(await Go.StartLogin(network, flowID), flows));
+
+    const showOtherWays = (step: inbox.LoginStep, flows?: inbox.LoginFlow[]) => run(async () => {
+        Go.CancelLogin(step.sessionId);
+        setView({kind: 'flows', network: step.network, flows: flows ?? await loadFlows(step.network)});
+    });
 
     const submit = (step: inbox.LoginStep, values: Record<string, string>) =>
         run(async () => showStep(await Go.SubmitLogin(step.sessionId, values)));
@@ -83,17 +100,32 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                 {view.kind === 'list' && <>
                     {props.accounts.length > 0 && (
                         <ul className="account-list">
-                            {props.accounts.map(a => (
-                                <li key={a.network + a.id}>
-                                    <NetworkIcon network={a.network} size={22}/>
-                                    <div className="account-info">
-                                        <div>{a.name || a.id} <span className="muted">· {a.networkName}</span></div>
-                                        <div className={`account-state ${a.state}`}>{stateLabel(a)}</div>
-                                    </div>
-                                    <button className="link" disabled={busy}
-                                            onClick={() => run(() => Go.Logout(a.network, a.id))}>Log out</button>
-                                </li>
-                            ))}
+                            {props.accounts.map(a => {
+                                const key = a.network + a.id;
+                                return (
+                                    <li key={key} className={confirmingLogout === key ? 'confirming' : ''}>
+                                        <NetworkIcon network={a.network} size={22}/>
+                                        <div className="account-info">
+                                            <div>{a.name || a.id} <span className="muted">· {a.networkName}</span></div>
+                                            {confirmingLogout === key
+                                                ? <div className="logout-warning">
+                                                    This also removes your {a.networkName} chats from this computer.
+                                                    They stay on {a.networkName}.
+                                                </div>
+                                                : <div className={`account-state ${a.state}`}>{stateLabel(a)}</div>}
+                                        </div>
+                                        {confirmingLogout === key ? <>
+                                            <button className="link" disabled={busy} onClick={() => setConfirmingLogout('')}>Cancel</button>
+                                            <button className="link danger" disabled={busy} onClick={() => run(async () => {
+                                                await Go.Logout(a.network, a.id);
+                                                setConfirmingLogout('');
+                                            })}>Log out</button>
+                                        </> : (
+                                            <button className="link" disabled={busy} onClick={() => setConfirmingLogout(key)}>Log out</button>
+                                        )}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     )}
                     <p className="muted">Connect an account:</p>
@@ -111,10 +143,14 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                 </>}
 
                 {view.kind === 'flows' && <>
-                    <p className="muted">How do you want to sign in?</p>
+                    <p className="muted">Other ways to sign in</p>
+                    <p className="fine-print">
+                        Username-and-password sign-in is often challenged or blocked by Meta for apps like this.
+                        If it fails, use the recommended option, which logs in on the real website.
+                    </p>
                     <div className="flow-list">
                         {view.flows.map((f, i) => (
-                            <button key={f.id} className="flow-button" disabled={busy} onClick={() => startFlow(view.network, f.id)}>
+                            <button key={f.id} className="flow-button" disabled={busy} onClick={() => startFlow(view.network, f.id, view.flows)}>
                                 <strong>{f.name}{i === 0 && <span className="pill">Recommended</span>}</strong>
                                 <span>{f.description}</span>
                             </button>
@@ -123,13 +159,17 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                     <button className="link" onClick={() => setView({kind: 'list'})}>← Back</button>
                 </>}
 
-                {view.kind === 'step' && <StepForm key={stepKey(view.step)} step={view.step} busy={busy} error={error}
-                                                   onSubmit={v => submit(view.step, v)}
-                                                   onBrowserLogin={() => run(async () => showStep(await Go.BrowserLogin(view.step.sessionId)))}
-                                                   onChooseOther={() => {
-                                                       Go.CancelLogin(view.step.sessionId);
-                                                       pickNetwork(view.step.network);
-                                                   }}/>}
+                {view.kind === 'step' && <>
+                    <StepForm key={stepKey(view.step)} step={view.step} busy={busy} error={error}
+                              onSubmit={v => submit(view.step, v)}
+                              onBrowserLogin={() => run(async () => showStep(await Go.BrowserLogin(view.step.sessionId)))}
+                              onChooseOther={() => showOtherWays(view.step, view.flows)}/>
+                    {!busy && (view.flows?.length ?? 0) > 1 && (
+                        <button className="link other-ways" onClick={() => showOtherWays(view.step, view.flows)}>
+                            Other ways to sign in
+                        </button>
+                    )}
+                </>}
 
                 {view.kind === 'done' && <>
                     <p>Connected! Your conversations will start appearing in a moment.</p>

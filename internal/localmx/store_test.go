@@ -58,3 +58,67 @@ func TestMediaSurvivesDataFolderMove(t *testing.T) {
 		}
 	}
 }
+
+// Deleting a chat removes its messages, receipts and media files, but keeps
+// media still used elsewhere and never touches files nothing refers to yet
+// (e.g. an upload in progress for another chat).
+func TestDeleteRoomCleansUp(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(t.TempDir(), "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	media := func(name string) id.ContentURIString {
+		path := filepath.Join(store.MediaDir, name)
+		if err := os.WriteFile(path, []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mxc := id.ContentURIString("mxc://local/" + name)
+		if err := store.SaveMedia(ctx, mxc, path, "image/jpeg"); err != nil {
+			t.Fatal(err)
+		}
+		return mxc
+	}
+	onlyHere, shared, avatar, uploading := media("only-here"), media("shared"), media("avatar"), media("uploading")
+	exec := func(q string, args ...any) {
+		if _, err := store.DB.Exec(q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec("INSERT INTO rooms (room_id, network, avatar) VALUES ('!a:local', 'instagram', ?), ('!b:local', 'messenger', '')", avatar)
+	exec("INSERT INTO profiles (user_id, avatar) VALUES ('@friend:local', ?)", avatar)
+	exec(`INSERT INTO events (event_id, room_id, sender, type, content, ts) VALUES
+		('$1', '!a:local', '@x:local', 'm.room.message', ?, 1),
+		('$2', '!a:local', '@x:local', 'm.room.message', ?, 2),
+		('$3', '!b:local', '@x:local', 'm.room.message', ?, 3)`,
+		`{"msgtype":"m.image","url":"`+string(onlyHere)+`"}`,
+		`{"msgtype":"m.image","url":"`+string(shared)+`"}`,
+		`{"msgtype":"m.image","url":"`+string(shared)+`"}`)
+	exec("INSERT INTO receipts (room_id, user_id, event_id, ts) VALUES ('!a:local', '@x:local', '$2', 1)")
+
+	if err = store.DeleteRoom(ctx, "!a:local"); err != nil {
+		t.Fatal(err)
+	}
+	count := func(q string) (n int) {
+		if err := store.DB.QueryRow(q).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if n := count("SELECT count(*) FROM events WHERE room_id='!a:local'") + count("SELECT count(*) FROM receipts") + count("SELECT count(*) FROM rooms WHERE room_id='!a:local'"); n != 0 {
+		t.Fatalf("expected the room's rows to be gone, %d left", n)
+	}
+	exists := func(mxc id.ContentURIString) bool {
+		_, err := os.Stat(filepath.Join(store.MediaDir, filepath.Base(string(mxc))))
+		return err == nil
+	}
+	if exists(onlyHere) {
+		t.Error("media only used by the deleted room should be removed")
+	}
+	for _, kept := range []id.ContentURIString{shared, avatar, uploading} {
+		if !exists(kept) {
+			t.Errorf("%s should have been kept", kept)
+		}
+	}
+}
