@@ -194,3 +194,46 @@ func TestOpenChatReusesExistingDM(t *testing.T) {
 		t.Fatalf("one-letter search should be a no-op, got %v, %v", people, err)
 	}
 }
+
+func TestMediaFileName(t *testing.T) {
+	cases := []struct{ name, mime, want string }{
+		{"beach.jpg", "image/jpeg", "beach.jpg"},
+		{"", "image/jpeg", "abc123.jpg"},
+		{"IMG_0001", "image/png", "IMG_0001.png"},
+		{"../../etc/passwd", "text/plain", "passwd.txt"},
+		{`C:\Users\x\photo`, "image/webp", "photo.webp"},
+		{"", "application/x-unknown", "abc123"},
+	}
+	for _, c := range cases {
+		if got := MediaFileName(c.name, c.mime, "abc123"); got != c.want {
+			t.Errorf("MediaFileName(%q, %q) = %q, want %q", c.name, c.mime, got, c.want)
+		}
+	}
+}
+
+// Opening or saving a photo copies the stored file out with a usable name,
+// and refuses anything that isn't a media link.
+func TestMediaCopy(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	src := filepath.Join(svc.Store.MediaDir, "pic1")
+	if err := os.WriteFile(src, []byte("jpeg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Store.SaveMedia(ctx, "mxc://local/pic1", src, "image/jpeg"); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	path, err := svc.MediaCopy(ctx, MediaURL("mxc://local/pic1"), "", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); filepath.Base(path) != "pic1.jpg" || string(data) != "jpeg" {
+		t.Fatalf("copied to %s with %q", path, data)
+	}
+	for _, bad := range []string{"/media/../inbox.db", "/etc/passwd", "/media/", "/media/missing"} {
+		if _, err = svc.MediaCopy(ctx, bad, "", out); err == nil {
+			t.Errorf("%s: expected an error", bad)
+		}
+	}
+}

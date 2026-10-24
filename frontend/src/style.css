@@ -240,6 +240,33 @@ button.thread-hide:hover { color: var(--fg); }
 .bubble.notice { background: transparent; color: var(--fg-muted); font-style: italic; }
 .bubble.redacted { background: transparent !important; color: var(--fg-muted) !important; border: 1px dashed var(--border); }
 .media { display: block; max-width: 100%; max-height: 360px; border-radius: 14px; }
+.media.zoomable { cursor: zoom-in; }
+
+/* Full-window photo viewer. Always dark, like a photo app, whatever the theme. */
+.viewer {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    background: rgba(10, 10, 12, 0.94); color: #f2f2f5;
+}
+.viewer-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; --wails-draggable: no-drag; }
+.viewer-info { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; }
+.viewer-date { font-size: 12px; font-weight: 400; color: #a9abb8; }
+.viewer-error { font-size: 12.5px; color: #ff8a8a; margin-right: 8px; }
+button.viewer-button {
+    background: rgba(255, 255, 255, 0.1); color: #f2f2f5; border: none;
+    padding: 6px 14px; border-radius: 8px; font-size: 13px;
+}
+button.viewer-button:hover { background: rgba(255, 255, 255, 0.18); }
+.viewer-stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 0 64px 24px; }
+.viewer-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+button.viewer-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border-radius: 50%; border: none;
+    background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 26px; line-height: 1;
+}
+button.viewer-nav:hover { background: rgba(255, 255, 255, 0.22); }
+button.viewer-nav.prev { left: 14px; }
+button.viewer-nav.next { right: 14px; }
+.viewer-caption { text-align: center; padding: 0 24px 20px; font-size: 14px; color: #dcdde3; user-select: text; }
 .edited { opacity: 0.65; font-size: 12px; }
 .msg-quote {
     font-size: 12.5px; color: var(--fg-muted);

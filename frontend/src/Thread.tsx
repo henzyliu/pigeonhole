@@ -1,6 +1,7 @@
 import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
+import ImageViewer from './ImageViewer';
 import NetworkIcon from './NetworkIcon';
 
 const PAGE = 50;
@@ -13,6 +14,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
     const [error, setError] = useState('');
     const [hasMore, setHasMore] = useState(true);
+    // The photo open in the full-window viewer, by event ID.
+    const [viewing, setViewing] = useState<string | null>(null);
     const scroller = useRef<HTMLDivElement>(null);
     const composer = useRef<HTMLTextAreaElement>(null);
     const stickToBottom = useRef(true);
@@ -135,6 +138,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         Go.React(chat.roomId, msg.eventId, key).catch(e => setError(errorText(e)));
 
     const byId = new Map(messages.map(m => [m.eventId, m]));
+    const images = messages.filter(m => m.kind === 'image' && m.mediaUrl && !m.redacted);
+    const viewingIndex = images.findIndex(m => m.eventId === viewing);
     // Sent / Delivered only shows under your newest message, like Messenger.
     const latestMine = [...messages].reverse().find(m => m.isMe && !m.redacted)?.eventId;
 
@@ -168,7 +173,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                             <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm}
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
-                                        onReply={() => startReply(m)} onReact={key => react(m, key)}/>
+                                        onReply={() => startReply(m)} onReact={key => react(m, key)}
+                                        onOpenImage={() => setViewing(m.eventId)}/>
                         </Fragment>
                     );
                 })}
@@ -193,6 +199,10 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                           onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>Send</button>
             </div>
+            {viewingIndex >= 0 && (
+                <ImageViewer images={images} index={viewingIndex}
+                             onIndex={i => setViewing(images[i].eventId)} onClose={() => setViewing(null)}/>
+            )}
         </section>
     );
 }
@@ -211,6 +221,7 @@ function MessageRow(props: {
     replied?: inbox.Message;
     onReply: () => void;
     onReact: (key: string) => void;
+    onOpenImage: () => void;
 }) {
     const {msg} = props;
     const [picking, setPicking] = useState(false);
@@ -246,7 +257,7 @@ function MessageRow(props: {
                 )}
                 <div className="msg-line">
                     <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''}`} title={new Date(msg.ts).toLocaleString()}>
-                        <MessageBody msg={msg}/>
+                        <MessageBody msg={msg} onOpenImage={props.onOpenImage}/>
                     </div>
                     {!msg.redacted && (
                         <div className="msg-actions" role="toolbar" ref={actionsRef}>
@@ -329,13 +340,13 @@ function SeenBy(props: {readers: inbox.Reader[]; isDm: boolean; isMe: boolean}) 
     );
 }
 
-function MessageBody({msg}: {msg: inbox.Message}) {
+function MessageBody({msg, onOpenImage}: {msg: inbox.Message; onOpenImage: () => void}) {
     if (msg.redacted) return <em>Message deleted</em>;
     const caption = msg.body ? <div className="caption">{linkify(msg.body)}</div> : null;
     switch (msg.kind) {
         case 'image':
             return <>
-                <img className="media" src={msg.mediaUrl} alt={msg.fileName} loading="lazy"
+                <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenImage}
                      style={msg.width && msg.height ? {aspectRatio: `${msg.width} / ${msg.height}`} : undefined}/>
                 {caption}
             </>;
@@ -344,7 +355,12 @@ function MessageBody({msg}: {msg: inbox.Message}) {
         case 'audio':
             return <audio src={msg.mediaUrl} controls preload="metadata"/>;
         case 'file':
-            return <><a href={msg.mediaUrl} download={msg.fileName}>📎 {msg.fileName}</a>{caption}</>;
+            // Download links do nothing in the Mac webview, so files open in
+            // their default app instead.
+            return <><a href={msg.mediaUrl} onClick={e => {
+                e.preventDefault();
+                Go.OpenMedia(msg.mediaUrl, msg.fileName).catch(console.error);
+            }}>📎 {msg.fileName}</a>{caption}</>;
         case 'emote':
             return <em>{linkify(msg.body)}</em>;
         default:

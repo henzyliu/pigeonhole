@@ -42,6 +42,7 @@ func (a *App) startup(ctx context.Context) {
 	applyTheme(ctx, a.GetSettings().Theme)
 	a.svc.Emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
 	a.setupNotifications()
+	go cleanOpenedMedia()
 	go func() {
 		if err := a.svc.Start(context.Background()); err != nil {
 			a.svc.Log.Err(err).Msg("Failed to start inbox")

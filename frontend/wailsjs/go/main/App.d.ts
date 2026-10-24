@@ -25,9 +25,13 @@ export function Networks():Promise<Array<inbox.LoginFlow>>;
 
 export function OpenChat(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function OpenMedia(arg1:string,arg2:string):Promise<void>;
+
 export function PickAndSendFiles(arg1:string):Promise<void>;
 
 export function React(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SaveMedia(arg1:string,arg2:string):Promise<void>;
 
 export function SearchPeople(arg1:string):Promise<Array<inbox.Person>>;
 

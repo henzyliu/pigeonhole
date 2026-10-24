@@ -46,12 +46,20 @@ export function OpenChat(arg1, arg2, arg3) {
   return window['go']['main']['App']['OpenChat'](arg1, arg2, arg3);
 }
 
+export function OpenMedia(arg1, arg2) {
+  return window['go']['main']['App']['OpenMedia'](arg1, arg2);
+}
+
 export function PickAndSendFiles(arg1) {
   return window['go']['main']['App']['PickAndSendFiles'](arg1);
 }
 
 export function React(arg1, arg2, arg3) {
   return window['go']['main']['App']['React'](arg1, arg2, arg3);
+}
+
+export function SaveMedia(arg1, arg2) {
+  return window['go']['main']['App']['SaveMedia'](arg1, arg2);
 }
 
 export function SearchPeople(arg1) {

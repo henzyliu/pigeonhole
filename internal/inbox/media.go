@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"mime"
 	"net/http"
 	"os"
@@ -17,6 +18,8 @@ import (
 	_ "golang.org/x/image/webp"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"unified-inbox/internal/localmx"
 )
 
 // MaxUploadSize matches Meta's attachment limit.
@@ -83,4 +86,68 @@ func msgTypeFor(mimeType string) event.MessageType {
 	default:
 		return event.MsgFile
 	}
+}
+
+// Common extensions by type; mime.ExtensionsByType returns them sorted, so
+// for JPEG it would pick ".jfif" and for plain text ".conf".
+var mediaExtensions = map[string]string{
+	"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp",
+	"image/heic": ".heic", "video/mp4": ".mp4", "video/quicktime": ".mov", "audio/mpeg": ".mp3",
+	"audio/ogg": ".ogg", "audio/mp4": ".m4a", "application/pdf": ".pdf", "text/plain": ".txt",
+}
+
+// MediaFileName is the name to give a stored file outside the app: the
+// original name if the message had one, with an extension that matches its
+// type, since stored media files have no extension.
+func MediaFileName(fileName, mimeType, fallback string) string {
+	name := strings.TrimSpace(filepath.Base(strings.ReplaceAll(fileName, "\\", "/")))
+	if name == "." || name == "/" || name == "" {
+		name = fallback
+	}
+	if filepath.Ext(name) != "" {
+		return name
+	}
+	ext := mediaExtensions[strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))]
+	if ext == "" {
+		if exts, _ := mime.ExtensionsByType(mimeType); len(exts) > 0 {
+			ext = exts[0]
+		}
+	}
+	return name + ext
+}
+
+// MediaCopy copies a stored file (by the /media/ URL the UI shows) to dir,
+// named by MediaFileName, and returns its path. Opening and saving images
+// use it.
+func (s *Service) MediaCopy(ctx context.Context, mediaURL, fileName, dir string) (string, error) {
+	mediaID, ok := strings.CutPrefix(mediaURL, mediaPrefix)
+	if !ok || mediaID == "" || strings.ContainsAny(mediaID, "/\\") {
+		return "", fmt.Errorf("not a media link: %q", mediaURL)
+	}
+	src, mimeType, err := s.Store.MediaPath(ctx, id.ContentURIString("mxc://"+localmx.ServerName+"/"+mediaID))
+	if err != nil {
+		return "", fmt.Errorf("file not found: %w", err)
+	}
+	if err = os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	dest := filepath.Join(dir, MediaFileName(fileName, mimeType, mediaID))
+	return dest, copyFile(src, dest)
+}
+
+func copyFile(src, dest string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
