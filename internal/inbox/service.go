@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -35,6 +36,18 @@ type Network struct {
 	Name   string
 	Bridge *bridgev2.Bridge
 	MX     *localmx.Connector
+	// started is set once Bridge.Start returns. Until then nothing may load
+	// the bridge's users or logins: some connectors (WhatsApp) crash loading
+	// a login before they've started, and the bridge then caches the user
+	// with no logins, so it starts up as if signed out.
+	started atomic.Bool
+}
+
+// errStarting is returned for actions on a network that hasn't started yet.
+type errStarting struct{ name string }
+
+func (e errStarting) Error() string {
+	return e.name + " is still starting, try again in a moment"
 }
 
 type Service struct {
@@ -197,9 +210,12 @@ func (s *Service) Start(ctx context.Context) error {
 		if err := n.Bridge.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start %s: %w", n.Name, err)
 		}
+		n.started.Store(true)
 		if _, err := n.Bridge.GetUserByMXID(ctx, Me); err != nil {
 			return fmt.Errorf("failed to create %s user: %w", n.Name, err)
 		}
+		// Show each account as soon as its network is up.
+		s.emit("inbox:accounts", nil)
 		if err := s.queueMissingBackfill(ctx, n); err != nil {
 			s.Log.Warn().Err(err).Str("network", netID).Msg("Failed to queue history backfill")
 		}
@@ -340,10 +356,13 @@ func (s *Service) onBridgeState(network string, state status.BridgeState) {
 	s.emit("inbox:accounts", nil)
 }
 
+// network returns a started network; see Network.started.
 func (s *Service) network(netID string) (*Network, error) {
 	n, ok := s.networks[netID]
 	if !ok {
 		return nil, fmt.Errorf("unknown network %q", netID)
+	} else if !n.started.Load() {
+		return nil, errStarting{n.Name}
 	}
 	return n, nil
 }

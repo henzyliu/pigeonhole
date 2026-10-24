@@ -198,6 +198,9 @@ func (s *Service) ResolveMedia(ctx context.Context, roomID, eventID string) erro
 // loginForRoom is the account a chat belongs to: its portal's receiver, or
 // the only account on that network.
 func (s *Service) loginForRoom(ctx context.Context, n *Network, roomID string) *bridgev2.UserLogin {
+	if !n.started.Load() {
+		return nil
+	}
 	if portal := s.portalFor(ctx, n.ID, roomID); portal != nil && portal.Receiver != "" {
 		if login := n.Bridge.GetCachedUserLoginByID(portal.Receiver); login != nil {
 			return login

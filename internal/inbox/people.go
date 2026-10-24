@@ -95,6 +95,9 @@ func (s *Service) OpenChat(ctx context.Context, network, loginID, userID string)
 }
 
 func (s *Service) loginsFor(ctx context.Context, n *Network) []*bridgev2.UserLogin {
+	if !n.started.Load() {
+		return nil
+	}
 	user, err := n.Bridge.GetUserByMXID(ctx, Me)
 	if err != nil {
 		return nil

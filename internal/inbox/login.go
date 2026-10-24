@@ -366,6 +366,9 @@ func (s *Service) Accounts() ([]Account, error) {
 	var out []Account
 	for _, netID := range s.order {
 		n := s.networks[netID]
+		if !n.started.Load() {
+			continue // listed once started (see Network.started)
+		}
 		user, err := n.Bridge.GetUserByMXID(s.ctx, Me)
 		if err != nil {
 			return nil, err

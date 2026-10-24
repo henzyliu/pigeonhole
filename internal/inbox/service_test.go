@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -214,6 +215,38 @@ func TestPendingHistoryQuery(t *testing.T) {
 	}
 	if _, err := svc.Accounts(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The UI can ask for accounts before every bridge has started. Loading a
+// bridge's logins that early used to crash WhatsApp's and leave it thinking
+// it had none, so it came up signed out; now unstarted networks are skipped.
+func TestNoBridgeAccessBeforeStart(t *testing.T) {
+	svc, err := New(t.TempDir(), zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := svc.Accounts()
+	if err != nil || len(accounts) != 0 {
+		t.Fatalf("expected no accounts before start: %v, %v", accounts, err)
+	}
+	if _, err = svc.StartLogin("whatsapp", "qr"); !errors.As(err, new(errStarting)) {
+		t.Fatalf("expected a still-starting error, got %v", err)
+	}
+	if people, err := svc.SearchPeople(context.Background(), "alice"); err != nil || len(people) != 0 {
+		t.Fatalf("search before start: %v, %v", people, err)
+	}
+	if err = svc.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(svc.Stop)
+	if _, err = svc.Accounts(); err != nil {
+		t.Fatal(err)
+	}
+	for _, netID := range svc.order {
+		if _, err = svc.network(netID); err != nil {
+			t.Errorf("%s should be ready after start: %v", netID, err)
+		}
 	}
 }
 
