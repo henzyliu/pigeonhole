@@ -73,7 +73,9 @@ scripts/build.sh
 
 This produces `build/bin/Pigeonhole.app` on macOS, with the commit, branch and
 build date stamped in (Settings → About shows them, and the log records them at
-startup). The version number itself is `info.productVersion` in `wails.json`.
+startup). The version number itself is `info.productVersion` in `wails.json`;
+bump it in the same commit as each change: the patch number (0.2.0 → 0.2.1)
+for fixes, the minor number (0.2.x → 0.3.0) when adding features.
 SQLite uses cgo, so a Windows build from a Mac needs the MinGW cross-compiler
 (`brew install mingw-w64`):
 
