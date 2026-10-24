@@ -290,6 +290,10 @@ button.thread-hide:hover { color: var(--fg); }
 .reaction.mine { border-color: var(--accent); }
 .msg-status { font-size: 11.5px; color: var(--fg-muted); margin: 2px 6px 0; }
 .msg-status.fail, .msg-status.retriable { color: var(--danger); }
+.history-loading {
+    width: fit-content; margin: 4px auto 12px; padding: 5px 12px; border-radius: 999px;
+    background: var(--bg-side); color: var(--fg-muted); font-size: 12.5px;
+}
 .seen-by { display: flex; gap: 2px; align-items: center; margin: 3px 4px 0; align-self: flex-end; }
 .msg-row.them .seen-by { align-self: flex-start; }
 .seen-by .avatar { font-size: 7px !important; }
@@ -338,6 +342,7 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 .account-list { list-style: none; padding: 0; margin: 4px 0 12px; }
 .account-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .account-info { flex: 1; }
+.account-syncing { font-size: 12px; color: var(--fg-muted); margin-top: 1px; }
 .account-state { font-size: 12px; color: var(--fg-muted); }
 .account-state.connected { color: #1f9d55; }
 .account-state.bad_credentials, .account-state.unknown_error { color: var(--danger); }

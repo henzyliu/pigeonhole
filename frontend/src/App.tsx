@@ -97,6 +97,18 @@ export default function App() {
         };
     }, [loadChats, loadAccounts, showChat]);
 
+    // A chat's history can finish loading without any new message to trigger
+    // a refresh, so check back while something is still loading.
+    const historyLoading = accounts.some(a => a.historyPending > 0) || chats.some(c => c.historyLoading);
+    useEffect(() => {
+        if (!historyLoading) return;
+        const timer = window.setInterval(() => {
+            loadChats();
+            loadAccounts();
+        }, 10_000);
+        return () => window.clearInterval(timer);
+    }, [historyLoading, loadChats, loadAccounts]);
+
     // Keep the backend informed so it can skip notifications for the chat
     // you're already reading.
     useEffect(() => {

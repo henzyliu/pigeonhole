@@ -119,7 +119,14 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                                                     This also removes your {a.networkName} chats from this computer.
                                                     They stay on {a.networkName}.
                                                 </div>
-                                                : <div className={`account-state ${a.state}`}>{stateLabel(a)}</div>}
+                                                : <>
+                                                    <div className={`account-state ${a.state}`}>{stateLabel(a)}</div>
+                                                    {a.historyPending > 0 && (
+                                                        <div className="account-syncing">
+                                                            Loading history · {a.historyPending} {a.historyPending === 1 ? 'chat' : 'chats'} left
+                                                        </div>
+                                                    )}
+                                                </>}
                                         </div>
                                         {confirmingLogout === key ? <>
                                             <button className="link" disabled={busy} onClick={() => setConfirmingLogout('')}>Cancel</button>

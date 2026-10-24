@@ -17,9 +17,28 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
     const composer = useRef<HTMLTextAreaElement>(null);
     const stickToBottom = useRef(true);
     const restoreFrom = useRef<number | null>(null);
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
+    const hasMoreRef = useRef(hasMore);
+    hasMoreRef.current = hasMore;
+    const loadedOnce = useRef(false);
 
     // Reload the newest page, keeping any older pages already loaded.
     const refresh = useCallback(async () => {
+        if (!hasMoreRef.current) {
+            // Everything stored is already showing, so reload all of it (and
+            // a page more): older messages the bridge has just fetched then
+            // appear at the top, without moving what you're looking at.
+            const loaded = messagesRef.current.length;
+            const all = await Go.Messages(chat.roomId, 0, loaded + PAGE) ?? [];
+            const el = scroller.current;
+            if (el && !stickToBottom.current && all.length > loaded) {
+                restoreFrom.current = el.scrollHeight - el.scrollTop;
+            }
+            setMessages(all);
+            if (all.length >= loaded + PAGE) setHasMore(true);
+            return;
+        }
         const latest = await Go.Messages(chat.roomId, 0, PAGE) ?? [];
         setMessages(prev => {
             if (prev.length === 0 || latest.length === 0) return latest;
@@ -29,9 +48,15 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         if (latest.length < PAGE) setHasMore(false);
     }, [chat.roomId]);
 
+    // Opening a chat loads at once; later changes (which arrive in bursts
+    // while history loads) are coalesced.
     useEffect(() => {
-        refresh().catch(e => setError(errorText(e)));
-        Go.MarkRead(chat.roomId).catch(console.error);
+        const timer = window.setTimeout(() => {
+            loadedOnce.current = true;
+            refresh().catch(e => setError(errorText(e)));
+            Go.MarkRead(chat.roomId).catch(console.error);
+        }, loadedOnce.current ? 200 : 0);
+        return () => window.clearTimeout(timer);
     }, [refresh, props.tick, chat.roomId]);
 
     // Files dropped anywhere on the window go to the open conversation.
@@ -128,6 +153,11 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                 </button>
             </header>
             <div className="messages" ref={scroller} onScroll={onScroll}>
+                {chat.historyLoading && !hasMore && (
+                    <div className="history-loading">
+                        Loading older messages from {NETWORK_LABELS[chat.network] ?? chat.network}…
+                    </div>
+                )}
                 {messages.map((m, i) => {
                     const prev = messages[i - 1];
                     const newDay = !prev || new Date(prev.ts).toDateString() !== new Date(m.ts).toDateString();

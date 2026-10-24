@@ -13,6 +13,7 @@ import (
 	"go.mau.fi/mautrix-meta/pkg/metaid"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -38,6 +39,9 @@ type Chat struct {
 	LastFromMe bool     `json:"lastFromMe"`
 	LastStatus string   `json:"lastStatus"`
 	SeenBy     []Reader `json:"seenBy"`
+	// HistoryLoading is set while the bridge is still fetching older
+	// messages for this chat.
+	HistoryLoading bool `json:"historyLoading"`
 }
 
 type Reaction struct {
@@ -159,6 +163,9 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		chats[i].Category = chatCategory(chats[i].Network, s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
 	}
 	if err = s.attachLatestStatus(ctx, chats, profiles); err != nil {
+		return nil, err
+	}
+	if err = s.attachHistoryLoading(ctx, chats); err != nil {
 		return nil, err
 	}
 	// DMs without an explicit name are named after the other person.
@@ -460,6 +467,53 @@ func (s *Service) attachLatestStatus(ctx context.Context, chats []Chat, profiles
 		chats[i].SeenBy = append(chats[i].SeenBy, Reader{Name: p.name, Avatar: MediaURL(p.avatar)})
 	}
 	return rows.Err()
+}
+
+func (s *Service) attachHistoryLoading(ctx context.Context, chats []Chat) error {
+	pending := make(map[string]map[networkid.PortalKey]networkid.UserLoginID)
+	for i := range chats {
+		n, ok := s.networks[chats[i].Network]
+		if !ok {
+			continue
+		}
+		if _, done := pending[n.ID]; !done {
+			p, err := s.pendingHistory(ctx, n)
+			if err != nil {
+				return err
+			}
+			pending[n.ID] = p
+		}
+		if portal := s.portalFor(ctx, n.ID, chats[i].RoomID); portal != nil {
+			_, chats[i].HistoryLoading = pending[n.ID][portal.PortalKey]
+		}
+	}
+	return nil
+}
+
+// pendingHistory lists the chats whose backfill task isn't done yet, i.e.
+// the bridge still has older messages to fetch (or, on WhatsApp, is still
+// receiving them from the phone), with the account each belongs to.
+// Folders and chats that were never created here don't count.
+func (s *Service) pendingHistory(ctx context.Context, n *Network) (map[networkid.PortalKey]networkid.UserLoginID, error) {
+	rows, err := n.Bridge.DB.Database.Query(ctx, `
+		SELECT t.portal_id, t.portal_receiver, t.user_login_id
+		FROM backfill_task t
+		JOIN portal p ON p.bridge_id = t.bridge_id AND p.id = t.portal_id AND p.receiver = t.portal_receiver
+		WHERE t.bridge_id = $1 AND NOT t.is_done AND p.mxid IS NOT NULL AND p.room_type <> 'space'`, n.Bridge.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s history progress: %w", n.Name, err)
+	}
+	defer rows.Close()
+	out := make(map[networkid.PortalKey]networkid.UserLoginID)
+	for rows.Next() {
+		var key networkid.PortalKey
+		var login networkid.UserLoginID
+		if err = rows.Scan(&key.ID, &key.Receiver, &login); err != nil {
+			return nil, err
+		}
+		out[key] = login
+	}
+	return out, rows.Err()
 }
 
 func (s *Service) roomNetwork(ctx context.Context, roomID string) (*Network, error) {

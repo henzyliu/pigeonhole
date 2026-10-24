@@ -65,6 +65,9 @@ type Account struct {
 	Name        string `json:"name"`
 	State       string `json:"state"`
 	Error       string `json:"error"`
+	// HistoryPending counts this account's chats whose older messages are
+	// still loading.
+	HistoryPending int `json:"historyPending"`
 }
 
 type pendingLogin struct {
@@ -367,6 +370,10 @@ func (s *Service) Accounts() ([]Account, error) {
 		if err != nil {
 			return nil, err
 		}
+		pending, err := s.pendingHistory(s.ctx, n)
+		if err != nil {
+			return nil, err
+		}
 		for _, login := range user.GetUserLogins() {
 			acc := Account{Network: netID, NetworkName: n.Name, ID: string(login.ID), Name: login.RemoteName, State: "connecting"}
 			s.lock.Lock()
@@ -379,6 +386,11 @@ func (s *Service) Accounts() ([]Account, error) {
 					if acc.Error == "" {
 						acc.Error = string(state.Error)
 					}
+				}
+			}
+			for _, owner := range pending {
+				if owner == login.ID {
+					acc.HistoryPending++
 				}
 			}
 			out = append(out, acc)

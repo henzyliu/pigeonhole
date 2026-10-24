@@ -201,6 +201,22 @@ func TestChatListLatestStatus(t *testing.T) {
 	}
 }
 
+// The history-progress query has to match every bridge's database schema.
+func TestPendingHistoryQuery(t *testing.T) {
+	svc := newTestService(t)
+	for _, netID := range svc.order {
+		pending, err := svc.pendingHistory(context.Background(), svc.networks[netID])
+		if err != nil {
+			t.Fatalf("%s: %v", netID, err)
+		} else if len(pending) != 0 {
+			t.Fatalf("%s: a new database shouldn't have pending history: %v", netID, pending)
+		}
+	}
+	if _, err := svc.Accounts(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseCookies(t *testing.T) {
 	cases := []string{
 		`{"sessionid":"a","csrftoken":"b"}`,

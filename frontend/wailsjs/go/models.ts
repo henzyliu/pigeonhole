@@ -7,6 +7,7 @@ export namespace inbox {
 	    name: string;
 	    state: string;
 	    error: string;
+	    historyPending: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Account(source);
@@ -20,6 +21,7 @@ export namespace inbox {
 	        this.name = source["name"];
 	        this.state = source["state"];
 	        this.error = source["error"];
+	        this.historyPending = source["historyPending"];
 	    }
 	}
 	export class Reader {
@@ -50,6 +52,7 @@ export namespace inbox {
 	    lastFromMe: boolean;
 	    lastStatus: string;
 	    seenBy: Reader[];
+	    historyLoading: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -70,6 +73,7 @@ export namespace inbox {
 	        this.lastFromMe = source["lastFromMe"];
 	        this.lastStatus = source["lastStatus"];
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
+	        this.historyLoading = source["historyLoading"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
