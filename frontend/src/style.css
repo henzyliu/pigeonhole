@@ -12,6 +12,8 @@
     --accent: #3d6cf4;
     --danger: #d93a3a;
     --danger-bg: #fdecec;
+    --warning: #9a6200;
+    --warning-bg: #fdf3e1;
     --radius: 18px;
     color-scheme: light;
 }
@@ -30,6 +32,8 @@
     --fg-muted: #9a9cab;
     --border: #2e3036;
     --danger-bg: #3b1f22;
+    --warning: #f0b24a;
+    --warning-bg: #3a2e18;
     color-scheme: dark;
 }
 
@@ -45,6 +49,8 @@
         --fg-muted: #9a9cab;
         --border: #2e3036;
         --danger-bg: #3b1f22;
+        --warning: #f0b24a;
+        --warning-bg: #3a2e18;
         color-scheme: dark;
     }
 }
@@ -392,6 +398,7 @@ button.link { background: none; border: none; color: var(--accent); padding: 0; 
 
 .banner { margin: 8px 16px; padding: 8px 12px; border-radius: 10px; font-size: 13px; user-select: text; }
 .banner.error { background: var(--danger-bg); color: var(--danger); }
+.banner.warning { background: var(--warning-bg); color: var(--warning); }
 
 /* Accounts modal */
 .modal-backdrop {
@@ -489,5 +496,22 @@ button.link.danger { color: var(--danger); font-weight: 600; }
 .setting-label { font-weight: 600; }
 .setting-hint { font-size: 12.5px; margin-top: 2px; }
 .setting-choice { margin: 0; flex-shrink: 0; width: 220px; }
+.setting-group { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px; }
+.setting.disabled .setting-label, .setting.disabled .setting-hint { opacity: 0.5; }
+.setting-note { margin: 0 0 4px; }
+.setting-banner { margin: 4px 0 8px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.setting-banner button.link { color: inherit; text-decoration: underline; font-weight: 600; }
+.setting-note button.link { font-size: inherit; }
+button.switch {
+    position: relative; flex-shrink: 0; width: 40px; height: 24px; padding: 0; border: none; border-radius: 12px;
+    background: var(--bg-selected); transition: background 0.15s;
+}
+button.switch.on { background: var(--accent); }
+button.switch:disabled { opacity: 0.45; cursor: default; }
+.switch-knob {
+    position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s;
+}
+button.switch.on .switch-knob { transform: translateX(16px); }
 .setting.about { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px; user-select: text; }
 .about-version { font-weight: 600; flex-shrink: 0; }

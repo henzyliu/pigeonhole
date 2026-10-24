@@ -23,9 +23,13 @@ export function Messages(arg1:string,arg2:number,arg3:number):Promise<Array<inbo
 
 export function Networks():Promise<Array<inbox.LoginFlow>>;
 
+export function NotificationPermission():Promise<main.NotificationPermission>;
+
 export function OpenChat(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function OpenMedia(arg1:string,arg2:string):Promise<void>;
+
+export function OpenNotificationSettings():Promise<void>;
 
 export function PickAndSendFiles(arg1:string):Promise<void>;
 
@@ -42,6 +46,10 @@ export function SendFiles(arg1:string,arg2:Array<string>):Promise<void>;
 export function SendText(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetChatHidden(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetHideMessageText(arg1:boolean):Promise<void>;
+
+export function SetNotifications(arg1:boolean):Promise<void>;
 
 export function SetTheme(arg1:string):Promise<void>;
 

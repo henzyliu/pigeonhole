@@ -302,8 +302,24 @@ export namespace inbox {
 
 export namespace main {
 	
+	export class NotificationPermission {
+	    status: string;
+	    system: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotificationPermission(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.status = source["status"];
+	        this.system = source["system"];
+	    }
+	}
 	export class Settings {
 	    theme: string;
+	    notificationsOff: boolean;
+	    hideMessageText: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -312,6 +328,8 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.theme = source["theme"];
+	        this.notificationsOff = source["notificationsOff"];
+	        this.hideMessageText = source["hideMessageText"];
 	    }
 	}
 	export class VersionInfo {

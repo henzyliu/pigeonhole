@@ -62,13 +62,9 @@ func (a *App) setupNotifications() {
 		a.svc.Log.Warn().Err(err).Msg("Desktop notifications unavailable")
 		return
 	}
-	go func() {
-		if ok, err := runtime.RequestNotificationAuthorization(a.ctx); err != nil || !ok {
-			a.svc.Log.Warn().Err(err).Bool("granted", ok).Msg("Notification permission not granted")
-		} else {
-			a.svc.Log.Info().Msg("Notification permission granted")
-		}
-	}()
+	if !a.GetSettings().NotificationsOff {
+		a.requestNotificationPermission()
+	}
 	// Clicking a notification brings the window forward on that chat.
 	runtime.OnNotificationResponse(a.ctx, func(result runtime.NotificationResult) {
 		if roomID, ok := result.Response.UserInfo["roomId"].(string); ok {
@@ -78,6 +74,11 @@ func (a *App) setupNotifications() {
 		}
 	})
 	a.svc.OnNotify = func(n inbox.Notification) {
+		settings := a.GetSettings()
+		if settings.NotificationsOff {
+			a.svc.Log.Debug().Str("room_id", n.RoomID).Msg("Not notifying: turned off in Settings")
+			return
+		}
 		a.viewLock.Lock()
 		looking := a.focused && a.activeRoom == n.RoomID
 		a.viewLock.Unlock()
@@ -86,6 +87,9 @@ func (a *App) setupNotifications() {
 			return
 		}
 		body := n.Body
+		if settings.HideMessageText {
+			body = hiddenMessageText
+		}
 		if n.Sender != "" {
 			body = n.Sender + ": " + body
 		}

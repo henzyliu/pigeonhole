@@ -21,6 +21,11 @@ import (
 type Settings struct {
 	// Theme is "system", "light" or "dark".
 	Theme string `json:"theme"`
+	// NotificationsOff silences desktop alerts. Stored as "off" so existing
+	// settings files, which lack it, keep notifications on.
+	NotificationsOff bool `json:"notificationsOff"`
+	// HideMessageText shows alerts as "New message" instead of the text.
+	HideMessageText bool `json:"hideMessageText"`
 }
 
 func settingsPath(dir string) string { return filepath.Join(dir, "settings.json") }
@@ -89,22 +94,45 @@ func (a *App) GetSettings() Settings {
 	return a.settings
 }
 
+// updateSettings applies change to a copy of the settings, saves it, and
+// only then makes it current.
+func (a *App) updateSettings(change func(*Settings)) error {
+	a.settingsLock.Lock()
+	defer a.settingsLock.Unlock()
+	next := a.settings
+	change(&next)
+	if err := next.save(a.dataDir); err != nil {
+		return errors.New("couldn't save the setting: " + err.Error())
+	}
+	a.settings = next
+	return nil
+}
+
 // SetTheme saves and applies "system", "light" or "dark".
 func (a *App) SetTheme(theme string) error {
 	if !appearance.Valid(theme) {
 		return fmt.Errorf("unknown theme %q", theme)
 	}
-	a.settingsLock.Lock()
-	next := a.settings
-	next.Theme = theme
-	err := next.save(a.dataDir)
-	if err == nil {
-		a.settings = next
-	}
-	a.settingsLock.Unlock()
-	if err != nil {
-		return errors.New("couldn't save the setting: " + err.Error())
+	if err := a.updateSettings(func(s *Settings) { s.Theme = theme }); err != nil {
+		return err
 	}
 	applyTheme(a.ctx, theme)
 	return nil
+}
+
+// SetNotifications turns desktop alerts on or off. Turning them on asks the
+// system for permission, which macOS only prompts for if never answered.
+func (a *App) SetNotifications(on bool) error {
+	if err := a.updateSettings(func(s *Settings) { s.NotificationsOff = !on }); err != nil {
+		return err
+	}
+	if on {
+		a.requestNotificationPermission()
+	}
+	return nil
+}
+
+// SetHideMessageText chooses whether alerts show the message text.
+func (a *App) SetHideMessageText(hide bool) error {
+	return a.updateSettings(func(s *Settings) { s.HideMessageText = hide })
 }

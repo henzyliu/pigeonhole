@@ -42,12 +42,20 @@ export function Networks() {
   return window['go']['main']['App']['Networks']();
 }
 
+export function NotificationPermission() {
+  return window['go']['main']['App']['NotificationPermission']();
+}
+
 export function OpenChat(arg1, arg2, arg3) {
   return window['go']['main']['App']['OpenChat'](arg1, arg2, arg3);
 }
 
 export function OpenMedia(arg1, arg2) {
   return window['go']['main']['App']['OpenMedia'](arg1, arg2);
+}
+
+export function OpenNotificationSettings() {
+  return window['go']['main']['App']['OpenNotificationSettings']();
 }
 
 export function PickAndSendFiles(arg1) {
@@ -80,6 +88,14 @@ export function SendText(arg1, arg2, arg3) {
 
 export function SetChatHidden(arg1, arg2) {
   return window['go']['main']['App']['SetChatHidden'](arg1, arg2);
+}
+
+export function SetHideMessageText(arg1) {
+  return window['go']['main']['App']['SetHideMessageText'](arg1);
+}
+
+export function SetNotifications(arg1) {
+  return window['go']['main']['App']['SetNotifications'](arg1);
 }
 
 export function SetTheme(arg1) {
