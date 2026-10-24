@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
-import {errorText, Go} from './api';
+import {errorText, Go, inbox} from './api';
+import NetworkIcon from './NetworkIcon';
 import {main} from '../wailsjs/go/models';
 import {applyTheme, Theme} from './theme';
 
@@ -15,11 +16,13 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
     const [prefs, setPrefs] = useState<main.Settings | null>(null);
     const [permission, setPermission] = useState<main.NotificationPermission | null>(null);
     const [startAtLogin, setStartAtLogin] = useState<main.StartAtLogin | null>(null);
+    const [accounts, setAccounts] = useState<inbox.Account[]>([]);
 
     useEffect(() => {
         Go.Version().then(setVersion).catch(console.error);
         Go.GetSettings().then(setPrefs).catch(console.error);
         Go.StartAtLogin().then(setStartAtLogin).catch(console.error);
+        Go.Accounts().then(a => setAccounts(a ?? [])).catch(console.error);
     }, []);
 
     const chooseStartAtLogin = async (on: boolean) => {
@@ -55,6 +58,13 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
         }
     };
     const notificationsOn = prefs ? !prefs.notificationsOff : true;
+    const accountKey = (a: inbox.Account) => `${a.network}/${a.id}`;
+    const accountOn = (a: inbox.Account) => !(prefs?.mutedAccounts ?? []).includes(accountKey(a));
+    const setAccountOn = (a: inbox.Account, on: boolean) => {
+        const others = (prefs?.mutedAccounts ?? []).filter(k => k !== accountKey(a));
+        return setPref({mutedAccounts: on ? others : [...others, accountKey(a)]},
+            () => Go.SetAccountNotifications(a.network, a.id, on));
+    };
 
     // Switch instantly, then save; put it back if saving fails.
     const choose = async (theme: Theme) => {
@@ -110,6 +120,22 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                         <Switch label="Hide message text" on={prefs.hideMessageText} disabled={!notificationsOn}
                                 onChange={hide => setPref({hideMessageText: hide}, () => Go.SetHideMessageText(hide))}/>
                     </div>
+                    {accounts.length > 0 && (
+                        <div className={`setting-accounts ${notificationsOn ? '' : 'disabled'}`}>
+                            <div className="muted setting-hint">Alerts from each account (chats still sync and show as unread):</div>
+                            {accounts.map(a => (
+                                <div key={accountKey(a)} className="setting setting-account">
+                                    <div className="setting-account-name">
+                                        <NetworkIcon network={a.network} size={16}/>
+                                        <span>{a.name || a.id}</span>
+                                        <span className="muted">· {a.networkName}</span>
+                                    </div>
+                                    <Switch label={`Alerts from ${a.name || a.id} on ${a.networkName}`} on={accountOn(a)}
+                                            disabled={!notificationsOn} onChange={on => setAccountOn(a, on)}/>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     {notificationsOn && permission && <PermissionNote permission={permission}/>}
                 </>}
                 {startAtLogin?.supported && (

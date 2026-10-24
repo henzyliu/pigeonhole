@@ -320,6 +320,7 @@ export namespace main {
 	    theme: string;
 	    notificationsOff: boolean;
 	    hideMessageText: boolean;
+	    mutedAccounts?: string[];
 	    backgroundNoticeShown: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -331,6 +332,7 @@ export namespace main {
 	        this.theme = source["theme"];
 	        this.notificationsOff = source["notificationsOff"];
 	        this.hideMessageText = source["hideMessageText"];
+	        this.mutedAccounts = source["mutedAccounts"];
 	        this.backgroundNoticeShown = source["backgroundNoticeShown"];
 	    }
 	}

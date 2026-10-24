@@ -52,3 +52,25 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatalf("expected the options to be saved: %+v", s)
 	}
 }
+
+// Muting one account's alerts is saved per account and can be undone.
+func TestAccountNotifications(t *testing.T) {
+	dir := t.TempDir()
+	app := NewApp(nil, dir, loadSettings(dir), false)
+	if err := app.SetAccountNotifications("discord", "123", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.SetAccountNotifications("discord", "123", false); err != nil {
+		t.Fatal(err)
+	}
+	s := loadSettings(dir)
+	if !s.accountMuted("discord", "123") || s.accountMuted("whatsapp", "123") || len(s.MutedAccounts) != 1 {
+		t.Fatalf("expected only Discord muted, once: %+v", s.MutedAccounts)
+	}
+	if err := app.SetAccountNotifications("discord", "123", true); err != nil {
+		t.Fatal(err)
+	}
+	if s = loadSettings(dir); len(s.MutedAccounts) != 0 {
+		t.Fatalf("expected no muted accounts: %+v", s.MutedAccounts)
+	}
+}

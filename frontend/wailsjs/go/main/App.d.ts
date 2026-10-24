@@ -45,6 +45,8 @@ export function SendFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function SendText(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SetAccountNotifications(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
 export function SetChatHidden(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetHideMessageText(arg1:boolean):Promise<void>;

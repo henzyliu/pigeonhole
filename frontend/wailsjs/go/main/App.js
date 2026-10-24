@@ -86,6 +86,10 @@ export function SendText(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendText'](arg1, arg2, arg3);
 }
 
+export function SetAccountNotifications(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetAccountNotifications'](arg1, arg2, arg3);
+}
+
 export function SetChatHidden(arg1, arg2) {
   return window['go']['main']['App']['SetChatHidden'](arg1, arg2);
 }

@@ -102,7 +102,7 @@ func TestNotifications(t *testing.T) {
 	send("hey!", time.Now())
 	select {
 	case n := <-got:
-		if n.RoomID != string(roomID) || n.Title != "Bob" || n.Body != "hey!" {
+		if n.RoomID != string(roomID) || n.Title != "Bob" || n.Body != "hey!" || n.Network != "instagram" {
 			t.Fatalf("unexpected notification: %+v", n)
 		}
 	case <-time.After(2 * time.Second):

@@ -13,6 +13,10 @@ type Notification struct {
 	Title  string // chat name
 	Sender string // set for group chats
 	Body   string
+	// Network and LoginID say which account the chat belongs to, so alerts
+	// can be silenced per account. LoginID is empty if it can't be told.
+	Network string
+	LoginID string
 }
 
 // maxNotifyAge stops a burst of alerts for old messages that arrive while
@@ -27,11 +31,11 @@ func (s *Service) onIncoming(roomID id.RoomID, sender id.UserID, ts int64, previ
 		return
 	}
 	ctx := context.Background()
-	var name string
+	var name, network string
 	var isDM bool
 	var mutedUntil int64
-	err := s.Store.DB.QueryRowContext(ctx, "SELECT name, is_dm, muted_until FROM rooms WHERE room_id=? AND is_portal=1", roomID).
-		Scan(&name, &isDM, &mutedUntil)
+	err := s.Store.DB.QueryRowContext(ctx, "SELECT name, network, is_dm, muted_until FROM rooms WHERE room_id=? AND is_portal=1", roomID).
+		Scan(&name, &network, &isDM, &mutedUntil)
 	if err != nil {
 		return
 	} else if mutedUntil > time.Now().UnixMilli() {
@@ -47,7 +51,12 @@ func (s *Service) onIncoming(roomID id.RoomID, sender id.UserID, ts int64, previ
 	}
 	var senderName string
 	_ = s.Store.DB.QueryRowContext(ctx, "SELECT name FROM profiles WHERE user_id=?", sender).Scan(&senderName)
-	n := Notification{RoomID: string(roomID), Title: name, Body: preview}
+	n := Notification{RoomID: string(roomID), Title: name, Body: preview, Network: network}
+	if net, ok := s.networks[network]; ok {
+		if login := s.loginForRoom(ctx, net, string(roomID)); login != nil {
+			n.LoginID = string(login.ID)
+		}
+	}
 	if isDM || name == "" {
 		n.Title = senderName
 	} else {

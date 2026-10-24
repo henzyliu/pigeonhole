@@ -527,6 +527,12 @@ button.link.danger { color: var(--danger); font-weight: 600; }
 .setting-group { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px; }
 .setting.disabled .setting-label, .setting.disabled .setting-hint { opacity: 0.5; }
 .setting-note { margin: 0 0 4px; }
+.setting-accounts { margin: 2px 0 6px; padding-left: 12px; border-left: 2px solid var(--border); }
+.setting-accounts.disabled { opacity: 0.5; }
+.setting.setting-account { padding: 5px 0; }
+.setting-account-name { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13.5px; }
+.setting-account-name span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setting-account-name .muted { flex-shrink: 0; }
 .setting-banner { margin: 4px 0 8px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
 .setting-banner button.link { color: inherit; text-decoration: underline; font-weight: 600; }
 .setting-note button.link { font-size: inherit; }

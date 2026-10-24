@@ -93,6 +93,9 @@ func (a *App) setupNotifications() {
 		if settings.NotificationsOff {
 			a.svc.Log.Debug().Str("room_id", n.RoomID).Msg("Not notifying: turned off in Settings")
 			return
+		} else if settings.accountMuted(n.Network, n.LoginID) {
+			a.svc.Log.Debug().Str("room_id", n.RoomID).Str("network", n.Network).Msg("Not notifying: account's alerts are off")
+			return
 		}
 		a.viewLock.Lock()
 		looking := a.focused && a.activeRoom == n.RoomID
@@ -159,7 +162,17 @@ func (a *App) BrowserLogin(sessionID string) (*inbox.LoginStep, error) {
 
 func (a *App) Accounts() ([]inbox.Account, error) { return a.svc.Accounts() }
 
-func (a *App) Logout(network, loginID string) error { return a.svc.Logout(network, loginID) }
+// Logout signs an account out. Its notification switch goes back to on, so
+// signing in again starts fresh.
+func (a *App) Logout(network, loginID string) error {
+	if err := a.svc.Logout(network, loginID); err != nil {
+		return err
+	}
+	if a.GetSettings().accountMuted(network, loginID) {
+		_ = a.SetAccountNotifications(network, loginID, true)
+	}
+	return nil
+}
 
 func (a *App) Chats() ([]inbox.Chat, error) { return a.svc.Chats(a.ctx) }
 

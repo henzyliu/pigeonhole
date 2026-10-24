@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -26,6 +27,9 @@ type Settings struct {
 	NotificationsOff bool `json:"notificationsOff"`
 	// HideMessageText shows alerts as "New message" instead of the text.
 	HideMessageText bool `json:"hideMessageText"`
+	// MutedAccounts lists accounts whose alerts are off, as AccountKey.
+	// Their chats still sync and count as unread.
+	MutedAccounts []string `json:"mutedAccounts,omitempty"`
 	// BackgroundNoticeShown records that the "still running" notice has
 	// been shown, after the window was first closed.
 	BackgroundNoticeShown bool `json:"backgroundNoticeShown"`
@@ -133,6 +137,24 @@ func (a *App) SetNotifications(on bool) error {
 		a.requestNotificationPermission()
 	}
 	return nil
+}
+
+// AccountKey identifies an account in MutedAccounts.
+func AccountKey(network, loginID string) string { return network + "/" + loginID }
+
+func (s Settings) accountMuted(network, loginID string) bool {
+	return slices.Contains(s.MutedAccounts, AccountKey(network, loginID))
+}
+
+// SetAccountNotifications turns one account's alerts on or off.
+func (a *App) SetAccountNotifications(network, loginID string, on bool) error {
+	key := AccountKey(network, loginID)
+	return a.updateSettings(func(s *Settings) {
+		s.MutedAccounts = slices.DeleteFunc(slices.Clone(s.MutedAccounts), func(k string) bool { return k == key })
+		if !on {
+			s.MutedAccounts = append(s.MutedAccounts, key)
+		}
+	})
 }
 
 // SetHideMessageText chooses whether alerts show the message text.
