@@ -122,6 +122,9 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 	if err = addColumn(db, "rooms", "hidden_ts", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return nil, fmt.Errorf("failed to add hidden chats: %w", err)
 	}
+	if err = refreshEditedPreviews(db); err != nil {
+		return nil, fmt.Errorf("failed to fix chat previews: %w", err)
+	}
 	if err = relativizeMediaPaths(db); err != nil {
 		return nil, fmt.Errorf("failed to fix media paths: %w", err)
 	}
@@ -297,6 +300,9 @@ func (s *Store) HandleEvent(ctx context.Context, evt *event.Event, countUnread b
 		if _, err = s.DB.ExecContext(ctx, "DELETE FROM reactions WHERE event_id=?", target); err == nil {
 			_, err = s.DB.ExecContext(ctx, "UPDATE events SET redacted=1, content='{}' WHERE event_id=?", target)
 		}
+		if err == nil {
+			err = refreshPreview(ctx, s.DB, target)
+		}
 	case event.EventReaction:
 		rel := evt.Content.AsReaction().RelatesTo
 		_, err = s.DB.ExecContext(ctx, `
@@ -312,6 +318,9 @@ func (s *Store) HandleEvent(ctx context.Context, evt *event.Event, countUnread b
 			if newContent, err = json.Marshal(msg.NewContent); err == nil {
 				_, err = s.DB.ExecContext(ctx, "UPDATE events SET content=?, edited=MAX(edited, ?) WHERE event_id=?",
 					newContent, !hidden, msg.RelatesTo.EventID)
+			}
+			if err == nil {
+				err = refreshPreview(ctx, s.DB, msg.RelatesTo.EventID)
 			}
 			break
 		}
@@ -378,6 +387,74 @@ func Preview(evtType event.Type, msg *event.MessageEventContent) string {
 		body = body[:i]
 	}
 	return body
+}
+
+// DeletedPreview is the chat-list preview for a deleted latest message.
+const DeletedPreview = "Message deleted"
+
+// refreshPreview redoes a chat's preview from an edited or deleted message,
+// if it's the chat's latest one; the preview is otherwise only set when a
+// message arrives.
+func refreshPreview(ctx context.Context, db dbExec, eventID id.EventID) error {
+	var roomID, evtType, raw string
+	var redacted bool
+	err := db.QueryRowContext(ctx, `
+		SELECT e.room_id, e.type, e.content, e.redacted
+		FROM events e JOIN rooms r ON r.room_id = e.room_id AND r.last_ts = e.ts
+		WHERE e.event_id = ?`, eventID).Scan(&roomID, &evtType, &raw, &redacted)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil // not the latest message, or not stored
+	} else if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, "UPDATE rooms SET preview=? WHERE room_id=?", storedPreview(evtType, raw, redacted), roomID)
+	return err
+}
+
+// storedPreview is Preview for a message as stored in the events table.
+func storedPreview(evtType, raw string, redacted bool) string {
+	if redacted {
+		return DeletedPreview
+	}
+	var content event.Content
+	if json.Unmarshal([]byte(raw), &content) != nil {
+		return ""
+	}
+	t := event.Type{Type: evtType, Class: event.MessageEventType}
+	_ = content.ParseRaw(t)
+	return Preview(t, content.AsMessage())
+}
+
+type dbExec interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// refreshEditedPreviews fixes previews saved before edits and deletions
+// updated them: chats whose latest message was edited or deleted since.
+func refreshEditedPreviews(db *sql.DB) error {
+	rows, err := db.Query(`
+		SELECT e.event_id FROM rooms r JOIN events e ON e.room_id = r.room_id AND e.ts = r.last_ts
+		WHERE e.edited = 1 OR e.redacted = 1`)
+	if err != nil {
+		return err
+	}
+	var ids []id.EventID
+	for rows.Next() {
+		var eventID id.EventID
+		if err = rows.Scan(&eventID); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, eventID)
+	}
+	rows.Close()
+	for _, eventID := range ids {
+		if err = refreshPreview(context.Background(), db, eventID); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // Message statuses, as stored in events.status. "pending", "fail" and

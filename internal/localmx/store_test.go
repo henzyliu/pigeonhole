@@ -192,3 +192,75 @@ func TestHiddenColumnAddedToOldDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The chat-list preview follows edits and deletions of the latest message,
+// and previews saved before that are repaired when the store opens.
+func TestPreviewFollowsEditsAndDeletions(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := OpenStore(dir, "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CreateRoom(ctx, "!a:local", "messenger", true, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	handle := func(evt *event.Event) {
+		t.Helper()
+		evt.RoomID = "!a:local"
+		if evt.Sender == "" {
+			evt.Sender = "@me:local"
+		}
+		if err := store.HandleEvent(ctx, evt, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	text := func(eventID id.EventID, ts int64, body string) {
+		handle(&event.Event{ID: eventID, Type: event.EventMessage, Timestamp: ts,
+			Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: body}}})
+	}
+	edit := func(eventID, target id.EventID, ts int64, body string) {
+		handle(&event.Event{ID: eventID, Type: event.EventMessage, Timestamp: ts,
+			Content: event.Content{Parsed: &event.MessageEventContent{
+				MsgType: event.MsgText, Body: "* " + body,
+				NewContent: &event.MessageEventContent{MsgType: event.MsgText, Body: body},
+				RelatesTo:  &event.RelatesTo{Type: event.RelReplace, EventID: target},
+			}}})
+	}
+	preview := func() (p string) {
+		t.Helper()
+		if err := store.DB.QueryRow("SELECT preview FROM rooms WHERE room_id='!a:local'").Scan(&p); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	text("$old", 100, "first")
+	text("$new", 200, "its been a whILE")
+	edit("$e1", "$new", 300, "its been a while")
+	if p := preview(); p != "its been a while" {
+		t.Fatalf("editing the latest message should update the preview, got %q", p)
+	}
+	edit("$e2", "$old", 400, "first, edited")
+	if p := preview(); p != "its been a while" {
+		t.Fatalf("editing an older message shouldn't change the preview, got %q", p)
+	}
+	handle(&event.Event{ID: "$r1", Type: event.EventRedaction, Timestamp: 500, Redacts: "$new",
+		Content: event.Content{Parsed: &event.RedactionEventContent{Redacts: "$new"}}})
+	if p := preview(); p != DeletedPreview {
+		t.Fatalf("deleting the latest message should show %q, got %q", DeletedPreview, p)
+	}
+
+	// A preview saved before this existed is repaired on open.
+	if _, err = store.DB.Exec("UPDATE rooms SET preview='stale' WHERE room_id='!a:local'"); err != nil {
+		t.Fatal(err)
+	}
+	store.DB.Close()
+	if store, err = OpenStore(dir, "@me:local"); err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if p := preview(); p != DeletedPreview {
+		t.Fatalf("expected the stale preview to be repaired, got %q", p)
+	}
+}

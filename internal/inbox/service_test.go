@@ -116,7 +116,7 @@ func TestPortalRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chats) != 1 || chats[0].Name != "Alice" || chats[0].Unread != 1 || chats[0].Preview != "hello there" {
+	if len(chats) != 1 || chats[0].Name != "Alice" || chats[0].Unread != 1 || chats[0].Preview != "hello!" {
 		t.Fatalf("unexpected chats: %+v", chats)
 	}
 	msgs, err := svc.Messages(ctx, string(roomID), 0, 50)
