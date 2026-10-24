@@ -17,8 +17,9 @@ import (
 
 func (a *App) startBackground() {
 	tray.Start(tray.Handlers{
-		Open: a.showWindow,
-		Quit: func() { runtime.Quit(a.ctx) },
+		Open:    a.showWindow,
+		Quit:    func() { runtime.Quit(a.ctx) },
+		AppIcon: appIconPNG,
 	})
 	// On Windows, Wails starts the window hidden (see main.go). On macOS the
 	// app hides itself instead, so clicking the Dock icon brings it back.
@@ -37,6 +38,9 @@ func (a *App) startBackground() {
 func (a *App) showWindow() {
 	runtime.WindowShow(a.ctx)
 	runtime.WindowUnminimise(a.ctx)
+	// Windows drops the taskbar badge while the window is hidden; put it
+	// back once the taskbar button exists again.
+	time.AfterFunc(300*time.Millisecond, tray.RefreshTaskbar)
 }
 
 const unreadUpdateDelay = 300 * time.Millisecond

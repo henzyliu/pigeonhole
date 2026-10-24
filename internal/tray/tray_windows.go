@@ -2,15 +2,21 @@
 
 package tray
 
-// The notification-area icon: the app's own icon, the unread count in its
-// tooltip, a click to open Pigeonhole and a right-click menu to open or quit.
+// The notification-area icon: the app's own icon (with a red dot when
+// something's unread), the unread count in its tooltip, a click to open
+// Pigeonhole and a right-click menu to open or quit. While the window is
+// open, its taskbar button also gets a red badge with the count.
 // It lives on its own thread with a hidden window to receive the icon's
 // messages, like the login window.
 
 import (
+	"bytes"
+	"image"
+	_ "image/png"
 	"os"
 	"runtime"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -35,6 +41,14 @@ var (
 	procSetForeground     = user32.NewProc("SetForegroundWindow")
 	procGetCursorPos      = user32.NewProc("GetCursorPos")
 	procLoadIconW         = user32.NewProc("LoadIconW")
+	procGetSystemMetrics  = user32.NewProc("GetSystemMetrics")
+	procCreateIconFromRes = user32.NewProc("CreateIconFromResourceEx")
+	procDestroyIcon       = user32.NewProc("DestroyIcon")
+	procFindWindowExW     = user32.NewProc("FindWindowExW")
+	procGetWindowThreadID = user32.NewProc("GetWindowThreadProcessId")
+
+	ole32                = windows.NewLazySystemDLL("ole32.dll")
+	procCoCreateInstance = ole32.NewProc("CoCreateInstance")
 
 	shell32              = windows.NewLazySystemDLL("shell32.dll")
 	procShellNotifyIconW = shell32.NewProc("Shell_NotifyIconW")
@@ -52,7 +66,8 @@ const (
 	wmRButtonUp    = 0x0205
 	wmApp          = 0x8000
 	wmTrayIcon     = wmApp + 1 // the icon's mouse events
-	wmTrayUpdate   = wmApp + 2 // refresh the tooltip from Go
+	wmTrayUpdate   = wmApp + 2 // refresh the icon and tooltip from Go
+	wmTaskbar      = wmApp + 3 // put the taskbar badge back
 	nimAdd         = 0
 	nimModify      = 1
 	nimDelete      = 2
@@ -67,6 +82,18 @@ const (
 	menuOpen       = 1
 	menuQuit       = 2
 	windowClass    = "PigeonholeTray"
+	smCxSmIcon     = 49
+	// Wails' main window class, to find Pigeonhole's taskbar button.
+	wailsWindowClass = "wailsWindow"
+	// ITaskbarList3::SetOverlayIcon: IUnknown (3), ITaskbarList (5),
+	// ITaskbarList2 (1), then 9 ITaskbarList3 methods before it.
+	taskbarHrInit         = 3
+	taskbarSetOverlayIcon = 18
+)
+
+var (
+	clsidTaskbarList = windows.GUID{Data1: 0x56FDF344, Data2: 0xFD6D, Data3: 0x11d0, Data4: [8]byte{0x95, 0x8A, 0x00, 0x60, 0x97, 0xC9, 0xA0, 0x90}}
+	iidTaskbarList3  = windows.GUID{Data1: 0xEA1AFB91, Data2: 0x9E28, Data3: 0x4B86, Data4: [8]byte{0x90, 0xE9, 0x9E, 0x9F, 0x8A, 0x5E, 0xEF, 0xAF}}
 )
 
 // notifyIconData is NOTIFYICONDATAW.
@@ -119,6 +146,13 @@ var (
 	hwnd    uintptr
 	icon    uintptr
 	tooltip = "Pigeonhole"
+	unread  int
+	// The tray icon without and with the unread dot, made on the tray
+	// thread at the system's small-icon size.
+	plainIcon, dotIcon uintptr
+	iconSize           = 16
+	// taskbar is the ITaskbarList3 used for the taskbar button's badge.
+	taskbar unsafe.Pointer
 	// taskbarCreated is broadcast when Explorer restarts, which drops every
 	// tray icon; the icon is added again when it arrives.
 	taskbarCreated uintptr
@@ -151,10 +185,20 @@ func setUnread(n int) {
 	}
 	lock.Lock()
 	tooltip = tip
+	unread = n
 	h := hwnd
 	lock.Unlock()
 	if h != 0 {
 		procPostMessageW.Call(h, wmTrayUpdate, 0, 0)
+	}
+}
+
+func refreshTaskbar() {
+	lock.Lock()
+	h := hwnd
+	lock.Unlock()
+	if h != 0 {
+		procPostMessageW.Call(h, wmTaskbar, 0, 0)
 	}
 }
 
@@ -164,6 +208,10 @@ func hideApp() {}
 func run() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	// The taskbar API is COM, used from this thread.
+	if windows.CoInitializeEx(0, windows.COINIT_APARTMENTTHREADED) == nil {
+		defer windows.CoUninitialize()
+	}
 
 	instance, _, _ := procGetModuleHandleW.Call(0)
 	name, _ := windows.UTF16PtrFromString(windowClass)
@@ -183,8 +231,10 @@ func run() {
 	hwnd = h
 	lock.Unlock()
 
-	icon = appIcon()
+	makeIcons()
+	icon = plainIcon
 	notify(nimAdd)
+	initTaskbar()
 
 	var m winMsg
 	for {
@@ -198,6 +248,106 @@ func run() {
 	lock.Lock()
 	hwnd = 0
 	lock.Unlock()
+}
+
+// makeIcons draws the tray icons from the app icon PNG at the system's
+// small-icon size (which grows with display scaling), falling back to the
+// exe's icon without a dot.
+func makeIcons() {
+	if size, _, _ := procGetSystemMetrics.Call(smCxSmIcon); size > 0 {
+		iconSize = int(size)
+	}
+	if src, _, err := image.Decode(bytes.NewReader(appIconPNG)); err == nil {
+		if data, err := trayIconPNG(src, iconSize, false); err == nil {
+			plainIcon = iconFromPNG(data)
+		}
+		if data, err := trayIconPNG(src, iconSize, true); err == nil {
+			dotIcon = iconFromPNG(data)
+		}
+	}
+	if plainIcon == 0 {
+		plainIcon = appIcon()
+	}
+	if dotIcon == 0 {
+		dotIcon = plainIcon
+	}
+}
+
+func iconFromPNG(data []byte) uintptr {
+	if len(data) == 0 {
+		return 0
+	}
+	// Windows reads PNG-compressed icon images directly (version 3.0 format).
+	h, _, _ := procCreateIconFromRes.Call(uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 1, 0x00030000,
+		uintptr(iconSize), uintptr(iconSize), 0)
+	return h
+}
+
+func initTaskbar() {
+	var obj unsafe.Pointer
+	hr, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsidTaskbarList)), 0, 1, // CLSCTX_INPROC_SERVER
+		uintptr(unsafe.Pointer(&iidTaskbarList3)), uintptr(unsafe.Pointer(&obj)))
+	if int32(hr) < 0 || obj == nil {
+		return
+	}
+	if r := comCall(obj, taskbarHrInit); int32(r) < 0 {
+		return
+	}
+	taskbar = obj
+}
+
+func comCall(obj unsafe.Pointer, slot int, args ...uintptr) uintptr {
+	vtbl := *(*unsafe.Pointer)(obj)
+	fn := *(*uintptr)(unsafe.Add(vtbl, slot*int(unsafe.Sizeof(uintptr(0)))))
+	r, _, _ := syscall.SyscallN(fn, append([]uintptr{uintptr(obj)}, args...)...)
+	return r
+}
+
+// mainWindow finds Pigeonhole's own Wails window (another Wails app could
+// use the same window class).
+func mainWindow() uintptr {
+	class, _ := windows.UTF16PtrFromString(wailsWindowClass)
+	pid := uint32(os.Getpid())
+	var h uintptr
+	for {
+		h, _, _ = procFindWindowExW.Call(0, h, uintptr(unsafe.Pointer(class)), 0)
+		if h == 0 {
+			return 0
+		}
+		var owner uint32
+		procGetWindowThreadID.Call(h, uintptr(unsafe.Pointer(&owner)))
+		if owner == pid {
+			return h
+		}
+	}
+}
+
+// updateTaskbar sets the taskbar button's badge: the unread count, or none.
+func updateTaskbar() {
+	if taskbar == nil {
+		return
+	}
+	main := mainWindow()
+	if main == 0 {
+		return
+	}
+	lock.Lock()
+	n := unread
+	lock.Unlock()
+	var badge uintptr
+	desc := ""
+	if n > 0 {
+		if data, err := badgePNG(n, iconSize); err == nil {
+			badge = iconFromPNG(data)
+		}
+		desc = itoa(n) + " unread"
+	}
+	descPtr, _ := windows.UTF16PtrFromString(desc)
+	comCall(taskbar, taskbarSetOverlayIcon, main, badge, uintptr(unsafe.Pointer(descPtr)))
+	// The taskbar keeps its own copy.
+	if badge != 0 {
+		procDestroyIcon.Call(badge)
+	}
 }
 
 // appIcon is the exe's own icon (the pigeon), or Windows' generic one.
@@ -265,7 +415,18 @@ func wndProc(h, msg, wParam, lParam uintptr) uintptr {
 		}
 		return 0
 	case msg == wmTrayUpdate:
+		lock.Lock()
+		if unread > 0 {
+			icon = dotIcon
+		} else {
+			icon = plainIcon
+		}
+		lock.Unlock()
 		notify(nimModify)
+		updateTaskbar()
+		return 0
+	case msg == wmTaskbar:
+		updateTaskbar()
 		return 0
 	case taskbarCreated != 0 && msg == taskbarCreated:
 		notify(nimAdd)

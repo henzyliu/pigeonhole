@@ -22,3 +22,5 @@ func pigeonholeTrayOpen() { openApp() }
 
 //export pigeonholeTrayQuit
 func pigeonholeTrayQuit() { quitApp() }
+
+func refreshTaskbar() {}

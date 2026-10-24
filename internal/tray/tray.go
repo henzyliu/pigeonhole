@@ -11,11 +11,15 @@ import "sync"
 type Handlers struct {
 	Open func()
 	Quit func()
+	// AppIcon is the app icon as a PNG, drawn into the Windows tray icon
+	// (with a red dot when something's unread).
+	AppIcon []byte
 }
 
 var (
 	handlersLock sync.Mutex
 	handlers     Handlers
+	appIconPNG   []byte
 )
 
 // Start shows the icon.
@@ -23,6 +27,7 @@ func Start(h Handlers) {
 	handlersLock.Lock()
 	handlers = h
 	handlersLock.Unlock()
+	appIconPNG = h.AppIcon
 	start()
 }
 
@@ -31,6 +36,11 @@ func Stop() { stop() }
 
 // SetUnread shows how many chats have unread messages (0 shows none).
 func SetUnread(n int) { setUnread(n) }
+
+// RefreshTaskbar puts the unread badge back on the Windows taskbar button,
+// which Windows drops while the window is hidden. Call it after showing the
+// window.
+func RefreshTaskbar() { refreshTaskbar() }
 
 // HideApp hides the app as if its window had been closed. On macOS that's
 // how Pigeonhole starts at login: hidden, but still in the Dock and menu
