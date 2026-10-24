@@ -68,15 +68,17 @@ go test . ./internal/...
 ## Building
 
 ```bash
-wails build -clean
+scripts/build.sh
 ```
 
-This produces `build/bin/Pigeonhole.app` on macOS. SQLite uses cgo, so a Windows
-build from a Mac needs the MinGW cross-compiler (`brew install mingw-w64`):
+This produces `build/bin/Pigeonhole.app` on macOS, with the commit, branch and
+build date stamped in (Settings → About shows them, and the log records them at
+startup). The version number itself is `info.productVersion` in `wails.json`.
+SQLite uses cgo, so a Windows build from a Mac needs the MinGW cross-compiler
+(`brew install mingw-w64`):
 
 ```bash
-CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
-  wails build -platform windows/amd64 -o Pigeonhole.exe
+scripts/build.sh windows
 ```
 
 The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows

@@ -1,5 +1,6 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {errorText, Go} from './api';
+import {main} from '../wailsjs/go/models';
 import {applyTheme, Theme} from './theme';
 
 const THEMES: {id: Theme; label: string}[] = [
@@ -10,6 +11,11 @@ const THEMES: {id: Theme; label: string}[] = [
 
 export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void}) {
     const [error, setError] = useState('');
+    const [version, setVersion] = useState<main.VersionInfo | null>(null);
+
+    useEffect(() => {
+        Go.Version().then(setVersion).catch(console.error);
+    }, []);
 
     // Switch instantly, then save; put it back if saving fails.
     const choose = async (theme: Theme) => {
@@ -48,7 +54,24 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                         ))}
                     </div>
                 </div>
+                {version && (
+                    <div className="setting about">
+                        <div>
+                            <div className="setting-label">About</div>
+                            <div className="muted setting-hint">{buildLine(version)}</div>
+                        </div>
+                        <div className="about-version">Pigeonhole {version.version}</div>
+                    </div>
+                )}
             </div>
         </div>
     );
+}
+
+// Which build this is, e.g. "Build ba8c578 · main · 24 Oct 2026". Builds
+// not made by scripts/build.sh (like wails dev) don't carry these.
+function buildLine(v: main.VersionInfo): string {
+    if (!v.commit) return 'Development build';
+    const date = v.buildDate ? new Date(v.buildDate + 'T00:00:00').toLocaleDateString([], {dateStyle: 'medium'}) : '';
+    return ['Build ' + v.commit, v.branch, date].filter(Boolean).join(' · ');
 }

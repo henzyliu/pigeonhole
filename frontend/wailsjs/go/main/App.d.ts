@@ -52,3 +52,5 @@ export function StartLogin(arg1:string,arg2:string):Promise<inbox.LoginStep>;
 export function StartupError():Promise<string>;
 
 export function SubmitLogin(arg1:string,arg2:Record<string, string>):Promise<inbox.LoginStep>;
+
+export function Version():Promise<main.VersionInfo>;

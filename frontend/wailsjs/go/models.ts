@@ -314,6 +314,24 @@ export namespace main {
 	        this.theme = source["theme"];
 	    }
 	}
+	export class VersionInfo {
+	    version: string;
+	    commit: string;
+	    branch: string;
+	    buildDate: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VersionInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.commit = source["commit"];
+	        this.branch = source["branch"];
+	        this.buildDate = source["buildDate"];
+	    }
+	}
 
 }
 

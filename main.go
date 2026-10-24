@@ -22,6 +22,9 @@ func main() {
 		os.Exit(1)
 	}
 	log := newLogger(dir)
+	v := versionInfo()
+	log.Info().Str("version", v.Version).Str("commit", v.Commit).Str("branch", v.Branch).
+		Str("build_date", v.BuildDate).Msg("Starting Pigeonhole")
 	svc, err := inbox.New(dir, log)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize inbox")
