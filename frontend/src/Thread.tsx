@@ -1,4 +1,4 @@
-import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {CSSProperties, Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
 import {linkify} from './links';
@@ -347,14 +347,17 @@ function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMed
     if (msg.redacted) return <em>Message deleted</em>;
     const caption = msg.body ? <div className="caption">{linkify(msg.body)}</div> : null;
     switch (msg.kind) {
-        case 'image': {
-            const img = <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenMedia}
-                             style={msg.width && msg.height ? {aspectRatio: `${msg.width} / ${msg.height}`} : undefined}/>;
+        case 'image':
+            // Always inside MediaFrame, so loading a post keeps this <img>
+            // and just changes its source: the thumbnail stays up until the
+            // full photo is ready, instead of a new image starting empty.
             return <>
-                {msg.fetchable ? <Fetchable kind={msg.fetchable} onFetch={onFetch}>{img}</Fetchable> : img}
+                <MediaFrame fetchable={msg.fetchable} onFetch={onFetch}>
+                    <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenMedia}
+                         style={mediaSize(msg)}/>
+                </MediaFrame>
                 {caption}
             </>;
-        }
         case 'video':
             return <><InlineVideo msg={msg} onExpand={onOpenMedia}/>{caption}</>;
         case 'audio':
@@ -374,21 +377,34 @@ function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMed
 }
 
 // Matches .media's max-height.
-const VIDEO_MAX_HEIGHT = 360;
+const MEDIA_MAX_HEIGHT = 360;
+
+// mediaSize gives a photo or video its box before the file loads, from the
+// stored dimensions: otherwise it starts empty (a photo) or 300x150 (a
+// video) and jumps once loaded. Sizing by width keeps the proportions when
+// max-width narrows it.
+function mediaSize(msg: inbox.Message): CSSProperties | undefined {
+    if (!(msg.width > 0 && msg.height > 0)) return undefined;
+    return {
+        aspectRatio: `${msg.width} / ${msg.height}`,
+        width: Math.round(msg.width * Math.min(1, MEDIA_MAX_HEIGHT / msg.height)),
+    };
+}
 
 const FETCH_LABELS: Record<string, string> = {reel: 'Play reel', story: 'Load story', post: 'Load post'};
 
-// A shared Instagram reel, story or post from history arrives as just a
-// thumbnail and link. The button asks the bridge to fetch the real thing;
-// the message then turns into it in place, so there's nothing to do after.
-function Fetchable(props: {kind: string; onFetch: () => Promise<void>; children: React.ReactNode}) {
+// The frame around a photo. A shared Instagram reel, story or post from
+// history arrives as just a thumbnail and link (fetchable is set); the button
+// asks the bridge to fetch the real thing, and the message then turns into
+// it in place, so there's nothing to do after.
+function MediaFrame(props: {fetchable: string; onFetch: () => Promise<void>; children: React.ReactNode}) {
     const [state, setState] = useState<'idle' | 'loading' | 'failed'>('idle');
     const [error, setError] = useState('');
     const fetch = (e: React.MouseEvent) => {
         e.stopPropagation();
         setState('loading');
         setError('');
-        // On success the message is replaced by the media, unmounting this.
+        // On success the message turns into the media, which drops the button.
         props.onFetch().then(() => setState('idle')).catch(err => {
             setState('failed');
             setError(errorText(err));
@@ -397,11 +413,13 @@ function Fetchable(props: {kind: string; onFetch: () => Promise<void>; children:
     return (
         <div className="fetchable">
             {props.children}
-            <button className={`fetch-button ${state}`} onClick={fetch} disabled={state === 'loading'}
-                    title={state === 'failed' ? error : undefined}>
-                {state === 'loading' ? 'Loading…' : state === 'failed' ? 'Try again' : <>▶ {FETCH_LABELS[props.kind] ?? 'Load'}</>}
-            </button>
-            {state === 'failed' && <div className="fetch-error">{error}</div>}
+            {props.fetchable && (
+                <button className={`fetch-button ${state}`} onClick={fetch} disabled={state === 'loading'}
+                        title={state === 'failed' ? error : undefined}>
+                    {state === 'loading' ? 'Loading…' : state === 'failed' ? 'Try again' : <>▶ {FETCH_LABELS[props.fetchable] ?? 'Load'}</>}
+                </button>
+            )}
+            {props.fetchable && state === 'failed' && <div className="fetch-error">{error}</div>}
         </div>
     );
 }
@@ -416,11 +434,9 @@ function Fetchable(props: {kind: string; onFetch: () => Promise<void>; children:
 function InlineVideo(props: {msg: inbox.Message; onExpand: () => void}) {
     const {msg} = props;
     const video = useRef<HTMLVideoElement>(null);
-    const sized = msg.width > 0 && msg.height > 0;
-    const style = sized ? {aspectRatio: `${msg.width} / ${msg.height}`, height: Math.min(VIDEO_MAX_HEIGHT, msg.height)} : undefined;
     return (
         <div className="inline-video">
-            <video ref={video} className="media" src={msg.mediaUrl} poster={msg.thumbnail || undefined} style={style}
+            <video ref={video} className="media" src={msg.mediaUrl} poster={msg.thumbnail || undefined} style={mediaSize(msg)}
                    controls preload="metadata"/>
             <button className="expand-button" aria-label="Open full window" title="Open full window" onClick={() => {
                 video.current?.pause();
