@@ -156,6 +156,17 @@ a { color: inherit; }
 .network-icon.fallback { border-radius: 50%; background: var(--fg-muted); }
 
 .chat-list { list-style: none; margin: 0; padding: 0 8px 8px; overflow-y: auto; flex: 1; }
+/* Right-click menu on a chat */
+.context-menu {
+    position: fixed; z-index: 15; min-width: 160px; padding: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.context-menu button {
+    display: block; width: 100%; text-align: left; padding: 7px 10px;
+    border: none; border-radius: 6px; background: transparent; color: var(--fg); font-size: 13px;
+}
+.context-menu button:hover { background: var(--bg-hover); }
 .chat-list-empty { flex: 1; padding: 32px 24px; color: var(--fg-muted); text-align: center; line-height: 1.5; }
 .chat-row {
     display: flex; gap: 12px; align-items: center;

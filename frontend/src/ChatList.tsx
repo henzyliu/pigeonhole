@@ -1,3 +1,4 @@
+import {useEffect, useRef, useState} from 'react';
 import {formatTime, inbox} from './api';
 import Avatar from './Avatar';
 import {splitLinks} from './links';
@@ -6,17 +7,27 @@ export default function ChatList(props: {
     chats: inbox.Chat[];
     selected: string;
     onSelect: (roomId: string) => void;
+    onSetHidden: (roomId: string, hidden: boolean) => void;
     emptyText: string;
 }) {
+    // The right-click menu, at the pointer. Acting from here doesn't open the
+    // chat, so nothing is marked as read.
+    const [menu, setMenu] = useState<{chat: inbox.Chat; x: number; y: number} | null>(null);
+
     if (props.chats.length === 0) {
         return <div className="chat-list-empty">{props.emptyText}</div>;
     }
     return (
-        <ul className="chat-list">
+        <>
+        <ul className="chat-list" onScroll={() => setMenu(null)}>
             {props.chats.map(chat => (
                 <li key={chat.roomId}
                     className={`chat-row ${chat.roomId === props.selected ? 'selected' : ''} ${chat.unread > 0 ? 'unread' : ''}`}
-                    onClick={() => props.onSelect(chat.roomId)}>
+                    onClick={() => props.onSelect(chat.roomId)}
+                    onContextMenu={e => {
+                        e.preventDefault();
+                        setMenu({chat, x: e.clientX, y: e.clientY});
+                    }}>
                     <Avatar name={chat.name} src={chat.avatar} size={44} network={chat.network}/>
                     <div className="chat-row-body">
                         <div className="chat-row-top">
@@ -33,6 +44,56 @@ export default function ChatList(props: {
                 </li>
             ))}
         </ul>
+        {menu && (
+            <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[{
+                label: menu.chat.hidden ? 'Unhide chat' : 'Hide chat',
+                onClick: () => props.onSetHidden(menu.chat.roomId, !menu.chat.hidden),
+            }]}/>
+        )}
+        </>
+    );
+}
+
+// A small menu at the pointer, kept inside the window. It closes on a pick,
+// a click elsewhere, Escape, or the window losing focus.
+function ContextMenu(props: {x: number; y: number; items: {label: string; onClick: () => void}[]; onClose: () => void}) {
+    const ref = useRef<HTMLDivElement>(null);
+    const [pos, setPos] = useState({left: props.x, top: props.y});
+
+    useEffect(() => {
+        const el = ref.current;
+        if (el) {
+            const margin = 8;
+            setPos({
+                left: Math.min(props.x, window.innerWidth - el.offsetWidth - margin),
+                top: Math.min(props.y, window.innerHeight - el.offsetHeight - margin),
+            });
+        }
+        const onDown = (e: MouseEvent) => {
+            if (!ref.current?.contains(e.target as Node)) props.onClose();
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') props.onClose();
+        };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        window.addEventListener('blur', props.onClose);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+            window.removeEventListener('blur', props.onClose);
+        };
+    }, [props.x, props.y, props.onClose]);
+
+    return (
+        <div ref={ref} className="context-menu" role="menu" style={pos} onContextMenu={e => e.preventDefault()}>
+            {props.items.map(item => (
+                <button key={item.label} role="menuitem" onClick={() => {
+                    props.onClose();
+                    item.onClick();
+                }}>{item.label}</button>
+            ))}
+        </div>
     );
 }
 

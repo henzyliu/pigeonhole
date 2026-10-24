@@ -188,7 +188,7 @@ export default function App() {
     // Hiding the open chat closes it, since it leaves the list you're looking at.
     const setChatHidden = async (roomId: string, hidden: boolean) => {
         await Go.SetChatHidden(roomId, hidden);
-        setSelected('');
+        if (selectedRef.current === roomId) setSelected('');
         loadChats();
     };
     const emptyText = accounts.length === 0
@@ -278,7 +278,8 @@ export default function App() {
                     ))}
                 </div>
                 {startError && <div className="banner error">{startError}</div>}
-                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}/>
+                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}
+                          onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}/>
                 {!query.trim() && !showHidden && hiddenCount > 0 && (
                     <button className="requests-row hidden-row" onClick={() => {
                         setShowHidden(true);
