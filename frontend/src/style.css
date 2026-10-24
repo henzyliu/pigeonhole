@@ -172,10 +172,12 @@ a { color: inherit; }
     position: relative; display: flex; gap: 12px; align-items: center;
     padding: 9px 10px; border-radius: 12px; cursor: pointer;
 }
-/* The ⋯ button takes the time's place while hovering (or while its menu is
-   open), leaving the unread badge below visible. */
+/* The ⋯ button sits in the middle of the row's right edge while hovering
+   (or while its menu is open). The time, receipt and unread count there
+   are hidden meanwhile, since the button is taller than one line; an unread
+   chat still shows in bold. */
 button.row-menu-button {
-    position: absolute; top: 6px; right: 8px; width: 28px; height: 28px; padding: 0;
+    position: absolute; top: 50%; right: 8px; transform: translateY(-50%); width: 28px; height: 28px; padding: 0;
     display: grid; place-items: center; border-radius: 50%;
     border: 1px solid var(--border); background: var(--bg); color: var(--fg-muted);
     opacity: 0; pointer-events: none; transition: opacity 0.1s;
@@ -184,7 +186,9 @@ button.row-menu-button {
     opacity: 1; pointer-events: auto;
 }
 button.row-menu-button:hover { color: var(--fg); }
-.chat-row:hover .chat-time, .chat-row.menu-open .chat-time { visibility: hidden; }
+.chat-row:hover .chat-time, .chat-row.menu-open .chat-time,
+.chat-row:hover .chat-row-bottom > .badge, .chat-row.menu-open .chat-row-bottom > .badge,
+.chat-row:hover .chat-row-bottom > .list-status, .chat-row.menu-open .chat-row-bottom > .list-status { visibility: hidden; }
 .chat-row:hover { background: var(--bg-hover); }
 .chat-row.selected { background: var(--bg-selected); }
 .chat-row-body { flex: 1; min-width: 0; }
