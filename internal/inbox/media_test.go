@@ -145,6 +145,20 @@ func TestChatCategories(t *testing.T) {
 	group := makePortal("book-club", func(p *bridgev2.Portal) {})
 	request := makePortal("stranger", func(p *bridgev2.Portal) { p.MessageRequest = true })
 	market := makePortal("seller", func(p *bridgev2.Portal) { p.ParentKey = networkid.PortalKey{ID: "folder"} })
+	// Older Marketplace chats arrive as plain groups outside the folder; the
+	// name and size give them away. A big group with that name pattern doesn't.
+	oldMarket := makePortal("old-seller", func(p *bridgev2.Portal) {})
+	dotGroup := makePortal("dot-group", func(p *bridgev2.Portal) {})
+	exec := func(q string, args ...any) {
+		if _, err := svc.Store.DB.Exec(q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec("UPDATE rooms SET name=?, is_dm=0 WHERE room_id=?", "Singh · 2017 BMW 330e", oldMarket)
+	exec("UPDATE rooms SET name=?, is_dm=0 WHERE room_id=?", "Uni · Flatmates", dotGroup)
+	for _, user := range []string{"@a:local", "@b:local", "@c:local"} {
+		exec("INSERT INTO members (room_id, user_id, membership) VALUES (?, ?, 'join')", dotGroup, user)
+	}
 
 	chats, err := svc.Chats(ctx)
 	if err != nil {
@@ -154,7 +168,10 @@ func TestChatCategories(t *testing.T) {
 	for _, c := range chats {
 		got[id.RoomID(c.RoomID)] = c.Category
 	}
-	want := map[id.RoomID]string{inbox: CategoryInbox, group: CategoryGroups, request: CategoryRequests, market: CategoryMarketplace}
+	want := map[id.RoomID]string{
+		inbox: CategoryInbox, group: CategoryGroups, request: CategoryRequests, market: CategoryMarketplace,
+		oldMarket: CategoryMarketplace, dotGroup: CategoryGroups,
+	}
 	if len(got) != len(want) {
 		t.Fatalf("expected the folder to be hidden, got %v", got)
 	}

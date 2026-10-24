@@ -167,6 +167,9 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 	})
 	for i := range chats {
 		chats[i].Category = chatCategory(chats[i].Network, s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
+		if chats[i].Category == CategoryGroups && s.looksLikeMarketplace(ctx, chats[i]) {
+			chats[i].Category = CategoryMarketplace
+		}
 	}
 	if err = s.attachLatestStatus(ctx, chats, profiles); err != nil {
 		return nil, err
@@ -246,6 +249,22 @@ func chatCategory(network string, portal *bridgev2.Portal, isDM bool) string {
 		return CategoryGroups
 	}
 }
+
+// looksLikeMarketplace catches Marketplace chats that Messenger reports as
+// ordinary groups, outside the Marketplace folder (older ones do this).
+// Their names are always "Person · Item" and they have only you, the other
+// person and the bridge's copy of you as members; real groups are bigger and
+// don't use that name pattern.
+func (s *Service) looksLikeMarketplace(ctx context.Context, c Chat) bool {
+	if c.Network != "messenger" || c.IsDM || !strings.Contains(c.Name, " · ") {
+		return false
+	}
+	members, err := s.Store.Members(ctx, id.RoomID(c.RoomID))
+	return err == nil && len(members) <= maxMarketplaceMembers
+}
+
+// maxMarketplaceMembers: you, the other person, and the bridge's copy of you.
+const maxMarketplaceMembers = 3
 
 func isMarketplaceThread(portal *bridgev2.Portal) bool {
 	meta, ok := portal.Metadata.(*metaid.PortalMetadata)
