@@ -235,7 +235,9 @@ button.thread-hide:hover { color: var(--fg); }
     overflow-wrap: anywhere;
 }
 .msg-row.me .bubble { background: var(--bg-bubble-me); color: var(--fg-on-accent); }
-.bubble.image, .bubble.video { padding: 0; background: transparent !important; overflow: hidden; }
+/* The photo or video rounds its own corners; clipping the bubble to them
+   would also cut into the caption's first and last letters. */
+.bubble.image, .bubble.video { padding: 0; background: transparent !important; border-radius: 0; }
 .bubble.image .caption, .bubble.video .caption { padding: 6px 2px 0; color: var(--fg); }
 .bubble.notice { background: transparent; color: var(--fg-muted); font-style: italic; }
 .bubble.redacted { background: transparent !important; color: var(--fg-muted) !important; border: 1px dashed var(--border); }
