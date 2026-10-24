@@ -3,6 +3,7 @@ package inbox
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -14,8 +15,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "golang.org/x/image/webp"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/provisionutil"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -150,4 +154,61 @@ func copyFile(src, dest string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// resolveMediaTimeout bounds fetching one reel, story or post from Instagram.
+const resolveMediaTimeout = time.Minute
+
+// ResolveMedia asks the bridge to fetch the real media for a message that
+// was stored as a thumbnail and link (Instagram reels, stories and posts from
+// history). The bridge replaces the message with the media by sending an
+// edit, which the store applies like any other, so the chat just refreshes.
+func (s *Service) ResolveMedia(ctx context.Context, roomID, eventID string) error {
+	var raw string
+	err := s.Store.DB.QueryRowContext(ctx, "SELECT content FROM events WHERE event_id=? AND room_id=?", eventID, roomID).Scan(&raw)
+	if err != nil {
+		return fmt.Errorf("message not found: %w", err)
+	}
+	var content map[string]json.RawMessage
+	if err = json.Unmarshal([]byte(raw), &content); err != nil {
+		return err
+	}
+	unresolved, ok := content[unresolvedMediaKey]
+	if !ok {
+		return nil // already fetched
+	}
+	n, err := s.roomNetwork(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	login := s.loginForRoom(ctx, n, roomID)
+	if login == nil {
+		return fmt.Errorf("not logged in to %s", n.Name)
+	}
+	ctx, cancel := context.WithTimeout(ctx, resolveMediaTimeout)
+	defer cancel()
+	_, err = provisionutil.ResolveMedia(ctx, login, id.EventID(eventID), &provisionutil.ReqResolveMedia{UnresolvedMedia: unresolved})
+	if err != nil {
+		s.Log.Warn().Err(err).Str("network", n.ID).Str("event_id", eventID).Msg("Failed to fetch shared media")
+		return fmt.Errorf("couldn't load it from %s. It may have been deleted, or the account is private", n.Name)
+	}
+	return nil
+}
+
+// loginForRoom is the account a chat belongs to: its portal's receiver, or
+// the only account on that network.
+func (s *Service) loginForRoom(ctx context.Context, n *Network, roomID string) *bridgev2.UserLogin {
+	if portal := s.portalFor(ctx, n.ID, roomID); portal != nil && portal.Receiver != "" {
+		if login := n.Bridge.GetCachedUserLoginByID(portal.Receiver); login != nil {
+			return login
+		}
+	}
+	user, err := n.Bridge.GetUserByMXID(ctx, Me)
+	if err != nil {
+		return nil
+	}
+	if logins := user.GetUserLogins(); len(logins) > 0 {
+		return logins[0]
+	}
+	return nil
 }

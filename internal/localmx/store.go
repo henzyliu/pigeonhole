@@ -305,9 +305,13 @@ func (s *Store) HandleEvent(ctx context.Context, evt *event.Event, countUnread b
 	case event.EventMessage, event.EventSticker:
 		msg := evt.Content.AsMessage()
 		if msg.RelatesTo != nil && msg.RelatesTo.Type == event.RelReplace && msg.NewContent != nil {
+			// Bridges mark edits that only fill in content (e.g. a reel fetched
+			// to replace its thumbnail) as not to be shown as edited.
+			hidden, _ := evt.Content.Raw["com.beeper.dont_render_edited"].(bool)
 			var newContent []byte
 			if newContent, err = json.Marshal(msg.NewContent); err == nil {
-				_, err = s.DB.ExecContext(ctx, "UPDATE events SET content=?, edited=1 WHERE event_id=?", newContent, msg.RelatesTo.EventID)
+				_, err = s.DB.ExecContext(ctx, "UPDATE events SET content=?, edited=MAX(edited, ?) WHERE event_id=?",
+					newContent, !hidden, msg.RelatesTo.EventID)
 			}
 			break
 		}

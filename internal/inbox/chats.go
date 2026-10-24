@@ -70,6 +70,10 @@ type Message struct {
 	Reactions    []Reaction `json:"reactions"`
 	// SeenBy lists the people whose read position is this message.
 	SeenBy []Reader `json:"seenBy"`
+	// Fetchable is set on a shared Instagram reel, story or post that was
+	// stored as just a thumbnail and link: "reel", "story" or "post". The
+	// bridge can fetch the real media on request (see ResolveMedia).
+	Fetchable string `json:"fetchable"`
 
 	senderID id.UserID
 }
@@ -327,6 +331,24 @@ func fillContent(m *Message, evtType, raw string) {
 		if msg.Info != nil {
 			m.MimeType, m.Width, m.Height = msg.Info.MimeType, msg.Info.Width, msg.Info.Height
 		}
+	}
+	if _, unresolved := content.Raw[unresolvedMediaKey]; unresolved {
+		link, _ := content.Raw["external_url"].(string)
+		m.Fetchable = fetchableKind(link)
+	}
+}
+
+// unresolvedMediaKey marks a message whose media the bridge can still fetch.
+const unresolvedMediaKey = "com.beeper.unresolved_media"
+
+func fetchableKind(link string) string {
+	switch {
+	case strings.Contains(link, "/reel/"):
+		return "reel"
+	case strings.Contains(link, "/stories/"):
+		return "story"
+	default:
+		return "post"
 	}
 }
 

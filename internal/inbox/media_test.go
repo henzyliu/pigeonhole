@@ -237,3 +237,53 @@ func TestMediaCopy(t *testing.T) {
 		}
 	}
 }
+
+// A reel from history is stored as a thumbnail the UI offers to play; the
+// bridge's fetch arrives as an edit that turns it into the video without
+// marking it edited.
+func TestFetchedReelReplacesThumbnail(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, _ := newPortal(t, svc, "instagram")
+	ghost := svc.networks["instagram"].MX.GhostIntent("999")
+	resp, err := ghost.SendMessage(ctx, roomID, event.EventMessage, &event.Content{
+		Parsed: &event.MessageEventContent{MsgType: event.MsgImage, Body: "funny dog", URL: "mxc://local/thumb"},
+		Raw: map[string]any{
+			"external_url":     "https://www.instagram.com/reel/abc123/",
+			unresolvedMediaKey: map[string]any{"kind": "permanent"},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := func() Message {
+		t.Helper()
+		msgs, err := svc.Messages(ctx, string(roomID), 0, 10)
+		if err != nil || len(msgs) != 1 {
+			t.Fatalf("messages: %+v, %v", msgs, err)
+		}
+		return msgs[0]
+	}
+	if m := message(); m.Fetchable != "reel" || m.Kind != "image" {
+		t.Fatalf("expected a fetchable reel thumbnail: %+v", m)
+	}
+
+	video := &event.MessageEventContent{MsgType: event.MsgVideo, Body: "funny dog", URL: "mxc://local/video"}
+	_, err = ghost.SendMessage(ctx, roomID, event.EventMessage, &event.Content{
+		Parsed: &event.MessageEventContent{
+			MsgType: event.MsgVideo, Body: "* funny dog", NewContent: video,
+			RelatesTo: &event.RelatesTo{Type: event.RelReplace, EventID: resp.EventID},
+		},
+		Raw: map[string]any{"com.beeper.dont_render_edited": true},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := message(); m.Kind != "video" || m.Fetchable != "" || m.Edited || m.MediaURL != MediaURL("mxc://local/video") {
+		t.Fatalf("expected the reel's video, not marked edited: %+v", m)
+	}
+	// Asking again once it's fetched does nothing.
+	if err = svc.ResolveMedia(ctx, string(roomID), string(resp.EventID)); err != nil {
+		t.Fatal(err)
+	}
+}

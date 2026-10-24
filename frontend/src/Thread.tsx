@@ -174,7 +174,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => startReply(m)} onReact={key => react(m, key)}
-                                        onOpenImage={() => setViewing(m.eventId)}/>
+                                        onOpenImage={() => setViewing(m.eventId)}
+                                        onFetch={() => Go.ResolveMedia(chat.roomId, m.eventId)}/>
                         </Fragment>
                     );
                 })}
@@ -222,6 +223,7 @@ function MessageRow(props: {
     onReply: () => void;
     onReact: (key: string) => void;
     onOpenImage: () => void;
+    onFetch: () => Promise<void>;
 }) {
     const {msg} = props;
     const [picking, setPicking] = useState(false);
@@ -257,7 +259,7 @@ function MessageRow(props: {
                 )}
                 <div className="msg-line">
                     <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''}`} title={new Date(msg.ts).toLocaleString()}>
-                        <MessageBody msg={msg} onOpenImage={props.onOpenImage}/>
+                        <MessageBody msg={msg} onOpenImage={props.onOpenImage} onFetch={props.onFetch}/>
                     </div>
                     {!msg.redacted && (
                         <div className="msg-actions" role="toolbar" ref={actionsRef}>
@@ -340,16 +342,18 @@ function SeenBy(props: {readers: inbox.Reader[]; isDm: boolean; isMe: boolean}) 
     );
 }
 
-function MessageBody({msg, onOpenImage}: {msg: inbox.Message; onOpenImage: () => void}) {
+function MessageBody({msg, onOpenImage, onFetch}: {msg: inbox.Message; onOpenImage: () => void; onFetch: () => Promise<void>}) {
     if (msg.redacted) return <em>Message deleted</em>;
     const caption = msg.body ? <div className="caption">{linkify(msg.body)}</div> : null;
     switch (msg.kind) {
-        case 'image':
+        case 'image': {
+            const img = <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenImage}
+                             style={msg.width && msg.height ? {aspectRatio: `${msg.width} / ${msg.height}`} : undefined}/>;
             return <>
-                <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenImage}
-                     style={msg.width && msg.height ? {aspectRatio: `${msg.width} / ${msg.height}`} : undefined}/>
+                {msg.fetchable ? <Fetchable kind={msg.fetchable} onFetch={onFetch}>{img}</Fetchable> : img}
                 {caption}
             </>;
+        }
         case 'video':
             return <><video className="media" src={msg.mediaUrl} controls preload="metadata"/>{caption}</>;
         case 'audio':
@@ -378,4 +382,34 @@ function linkify(text: string) {
             e.preventDefault();
             BrowserOpenURL(part);
         }}>{part}</a> : part);
+}
+
+const FETCH_LABELS: Record<string, string> = {reel: 'Play reel', story: 'Load story', post: 'Load post'};
+
+// A shared Instagram reel, story or post from history arrives as just a
+// thumbnail and link. The button asks the bridge to fetch the real thing;
+// the message then turns into it in place, so there's nothing to do after.
+function Fetchable(props: {kind: string; onFetch: () => Promise<void>; children: React.ReactNode}) {
+    const [state, setState] = useState<'idle' | 'loading' | 'failed'>('idle');
+    const [error, setError] = useState('');
+    const fetch = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setState('loading');
+        setError('');
+        // On success the message is replaced by the media, unmounting this.
+        props.onFetch().then(() => setState('idle')).catch(err => {
+            setState('failed');
+            setError(errorText(err));
+        });
+    };
+    return (
+        <div className="fetchable">
+            {props.children}
+            <button className={`fetch-button ${state}`} onClick={fetch} disabled={state === 'loading'}
+                    title={state === 'failed' ? error : undefined}>
+                {state === 'loading' ? 'Loading…' : state === 'failed' ? 'Try again' : <>▶ {FETCH_LABELS[props.kind] ?? 'Load'}</>}
+            </button>
+            {state === 'failed' && <div className="fetch-error">{error}</div>}
+        </div>
+    );
 }

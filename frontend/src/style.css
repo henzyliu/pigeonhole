@@ -241,6 +241,19 @@ button.thread-hide:hover { color: var(--fg); }
 .bubble.redacted { background: transparent !important; color: var(--fg-muted) !important; border: 1px dashed var(--border); }
 .media { display: block; max-width: 100%; max-height: 360px; border-radius: 14px; }
 .media.zoomable { cursor: zoom-in; }
+/* Play / load button over a shared reel's thumbnail. */
+.fetchable { position: relative; }
+button.fetch-button {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    border: none; border-radius: 999px; padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.62); color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+button.fetch-button:hover:not(:disabled) { background: rgba(0, 0, 0, 0.78); }
+button.fetch-button:disabled { cursor: progress; }
+.fetch-error {
+    position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 6px 10px; border-radius: 10px;
+    background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 12px; line-height: 1.35; text-align: center;
+}
 
 /* Full-window photo viewer. Always dark, like a photo app, whatever the theme. */
 .viewer {

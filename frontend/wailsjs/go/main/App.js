@@ -58,6 +58,10 @@ export function React(arg1, arg2, arg3) {
   return window['go']['main']['App']['React'](arg1, arg2, arg3);
 }
 
+export function ResolveMedia(arg1, arg2) {
+  return window['go']['main']['App']['ResolveMedia'](arg1, arg2);
+}
+
 export function SaveMedia(arg1, arg2) {
   return window['go']['main']['App']['SaveMedia'](arg1, arg2);
 }

@@ -223,6 +223,7 @@ export namespace inbox {
 	    replyTo: string;
 	    reactions: Reaction[];
 	    seenBy: Reader[];
+	    fetchable: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -248,6 +249,7 @@ export namespace inbox {
 	        this.replyTo = source["replyTo"];
 	        this.reactions = this.convertValues(source["reactions"], Reaction);
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
+	        this.fetchable = source["fetchable"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

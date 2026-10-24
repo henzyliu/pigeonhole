@@ -181,6 +181,12 @@ func (a *App) React(roomID, eventID, key string) error {
 
 func (a *App) MarkRead(roomID string) error { return a.svc.MarkRead(a.ctx, roomID) }
 
+// ResolveMedia fetches the real media for a shared Instagram reel, story or
+// post that was stored as a thumbnail; the message updates when it arrives.
+func (a *App) ResolveMedia(roomID, eventID string) error {
+	return a.svc.ResolveMedia(a.ctx, roomID, eventID)
+}
+
 // SetChatHidden hides a chat from the list (until a new message arrives) or
 // brings it back.
 func (a *App) SetChatHidden(roomID string, hidden bool) error {
