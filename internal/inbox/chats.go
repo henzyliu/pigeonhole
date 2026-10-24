@@ -611,6 +611,15 @@ func (s *Service) React(ctx context.Context, roomID, eventID, key string) error 
 	})
 }
 
+// UnreadChats counts chats with unread messages, as the menu bar / tray
+// icon shows: hidden chats don't count.
+func (s *Service) UnreadChats(ctx context.Context) (int, error) {
+	var n int
+	err := s.Store.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM rooms WHERE is_portal=1 AND unread>0 AND NOT "+localmx.HiddenClause).Scan(&n)
+	return n, err
+}
+
 // SetHidden hides a chat in Pigeonhole only; nothing changes on the network.
 func (s *Service) SetHidden(ctx context.Context, roomID string, hidden bool) error {
 	return s.Store.SetHidden(ctx, id.RoomID(roomID), hidden)

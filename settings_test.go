@@ -38,7 +38,7 @@ func TestNotificationSettings(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"theme":"dark"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	app := NewApp(nil, dir, loadSettings(dir))
+	app := NewApp(nil, dir, loadSettings(dir), false)
 	if s := app.GetSettings(); s.NotificationsOff || s.HideMessageText || s.Theme != "dark" {
 		t.Fatalf("old settings should keep notifications on with text: %+v", s)
 	}

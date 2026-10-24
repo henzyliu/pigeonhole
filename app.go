@@ -10,11 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"unified-inbox/internal/inbox"
+	"unified-inbox/internal/tray"
 )
 
 // App is the bridge between the React UI and the inbox service. Every
@@ -31,16 +33,29 @@ type App struct {
 	dataDir      string
 	settingsLock sync.Mutex
 	settings     Settings
+
+	// background is set when launched at login: start hidden.
+	background bool
+	unreadLock sync.Mutex
+	// unreadTimer coalesces the bursts of changes during sync into one
+	// recount for the menu bar / tray.
+	unreadTimer *time.Timer
 }
 
-func NewApp(svc *inbox.Service, dataDir string, settings Settings) *App {
-	return &App{svc: svc, dataDir: dataDir, settings: settings}
+func NewApp(svc *inbox.Service, dataDir string, settings Settings, background bool) *App {
+	return &App{svc: svc, dataDir: dataDir, settings: settings, background: background}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	applyTheme(ctx, a.GetSettings().Theme)
-	a.svc.Emit = func(name string, data any) { runtime.EventsEmit(ctx, name, data) }
+	a.svc.Emit = func(name string, data any) {
+		runtime.EventsEmit(ctx, name, data)
+		if name == "inbox:change" || name == "inbox:accounts" {
+			a.scheduleUnreadUpdate()
+		}
+	}
+	a.startBackground()
 	a.setupNotifications()
 	go cleanOpenedMedia()
 	go func() {
@@ -53,6 +68,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	tray.Stop()
 	runtime.CleanupNotifications(ctx)
 	a.svc.Stop()
 }
@@ -68,8 +84,7 @@ func (a *App) setupNotifications() {
 	// Clicking a notification brings the window forward on that chat.
 	runtime.OnNotificationResponse(a.ctx, func(result runtime.NotificationResult) {
 		if roomID, ok := result.Response.UserInfo["roomId"].(string); ok {
-			runtime.WindowShow(a.ctx)
-			runtime.WindowUnminimise(a.ctx)
+			a.showWindow()
 			runtime.EventsEmit(a.ctx, "inbox:open", roomID)
 		}
 	})

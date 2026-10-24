@@ -320,6 +320,7 @@ export namespace main {
 	    theme: string;
 	    notificationsOff: boolean;
 	    hideMessageText: boolean;
+	    backgroundNoticeShown: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -330,6 +331,23 @@ export namespace main {
 	        this.theme = source["theme"];
 	        this.notificationsOff = source["notificationsOff"];
 	        this.hideMessageText = source["hideMessageText"];
+	        this.backgroundNoticeShown = source["backgroundNoticeShown"];
+	    }
+	}
+	export class StartAtLogin {
+	    supported: boolean;
+	    enabled: boolean;
+	    system: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StartAtLogin(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.supported = source["supported"];
+	        this.enabled = source["enabled"];
+	        this.system = source["system"];
 	    }
 	}
 	export class VersionInfo {

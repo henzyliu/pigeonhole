@@ -14,11 +14,25 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
     const [version, setVersion] = useState<main.VersionInfo | null>(null);
     const [prefs, setPrefs] = useState<main.Settings | null>(null);
     const [permission, setPermission] = useState<main.NotificationPermission | null>(null);
+    const [startAtLogin, setStartAtLogin] = useState<main.StartAtLogin | null>(null);
 
     useEffect(() => {
         Go.Version().then(setVersion).catch(console.error);
         Go.GetSettings().then(setPrefs).catch(console.error);
+        Go.StartAtLogin().then(setStartAtLogin).catch(console.error);
     }, []);
+
+    const chooseStartAtLogin = async (on: boolean) => {
+        const previous = startAtLogin;
+        setError('');
+        setStartAtLogin(s => s && main.StartAtLogin.createFrom({...s, enabled: on}));
+        try {
+            await Go.SetStartAtLogin(on);
+        } catch (e) {
+            setStartAtLogin(previous);
+            setError(errorText(e));
+        }
+    };
 
     // Re-checked when you come back from the system's settings.
     useEffect(() => {
@@ -98,6 +112,18 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                     </div>
                     {notificationsOn && permission && <PermissionNote permission={permission}/>}
                 </>}
+                {startAtLogin?.supported && (
+                    <div className="setting setting-group">
+                        <div>
+                            <div className="setting-label">Start at login</div>
+                            <div className="muted setting-hint">
+                                Opens quietly in the {trayPlace(startAtLogin.system)} when you log in. Closing the window
+                                keeps Pigeonhole running there; quit it from its icon.
+                            </div>
+                        </div>
+                        <Switch label="Start at login" on={startAtLogin.enabled} onChange={chooseStartAtLogin}/>
+                    </div>
+                )}
                 {version && (
                     <div className="setting about">
                         <div>
@@ -113,6 +139,11 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
 }
 
 const HIDDEN_TEXT = 'New message';
+
+// Where the app's icon lives while it runs in the background.
+function trayPlace(system: string): string {
+    return system === 'Windows' ? 'notification area' : 'menu bar';
+}
 
 function Switch(props: {label: string; on: boolean; disabled?: boolean; onChange: (on: boolean) => void}) {
     return (

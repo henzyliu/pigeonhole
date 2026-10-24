@@ -98,12 +98,20 @@ export function SetNotifications(arg1) {
   return window['go']['main']['App']['SetNotifications'](arg1);
 }
 
+export function SetStartAtLogin(arg1) {
+  return window['go']['main']['App']['SetStartAtLogin'](arg1);
+}
+
 export function SetTheme(arg1) {
   return window['go']['main']['App']['SetTheme'](arg1);
 }
 
 export function SetView(arg1, arg2) {
   return window['go']['main']['App']['SetView'](arg1, arg2);
+}
+
+export function StartAtLogin() {
+  return window['go']['main']['App']['StartAtLogin']();
 }
 
 export function StartLogin(arg1, arg2) {
@@ -120,4 +128,8 @@ export function SubmitLogin(arg1, arg2) {
 
 export function Version() {
   return window['go']['main']['App']['Version']();
+}
+
+export function WindowHidden() {
+  return window['go']['main']['App']['WindowHidden']();
 }

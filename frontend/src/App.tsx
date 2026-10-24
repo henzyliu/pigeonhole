@@ -109,6 +109,16 @@ export default function App() {
         return () => window.clearInterval(timer);
     }, [historyLoading, loadChats, loadAccounts]);
 
+    // Closing the window only hides it now; the first time, the backend says
+    // Pigeonhole is still running.
+    useEffect(() => {
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') Go.WindowHidden().catch(console.error);
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, []);
+
     // Keep the backend informed so it can skip notifications for the chat
     // you're already reading.
     useEffect(() => {

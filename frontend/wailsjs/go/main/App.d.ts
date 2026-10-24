@@ -51,9 +51,13 @@ export function SetHideMessageText(arg1:boolean):Promise<void>;
 
 export function SetNotifications(arg1:boolean):Promise<void>;
 
+export function SetStartAtLogin(arg1:boolean):Promise<void>;
+
 export function SetTheme(arg1:string):Promise<void>;
 
 export function SetView(arg1:string,arg2:boolean):Promise<void>;
+
+export function StartAtLogin():Promise<main.StartAtLogin>;
 
 export function StartLogin(arg1:string,arg2:string):Promise<inbox.LoginStep>;
 
@@ -62,3 +66,5 @@ export function StartupError():Promise<string>;
 export function SubmitLogin(arg1:string,arg2:Record<string, string>):Promise<inbox.LoginStep>;
 
 export function Version():Promise<main.VersionInfo>;
+
+export function WindowHidden():Promise<void>;

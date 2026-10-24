@@ -26,6 +26,9 @@ type Settings struct {
 	NotificationsOff bool `json:"notificationsOff"`
 	// HideMessageText shows alerts as "New message" instead of the text.
 	HideMessageText bool `json:"hideMessageText"`
+	// BackgroundNoticeShown records that the "still running" notice has
+	// been shown, after the window was first closed.
+	BackgroundNoticeShown bool `json:"backgroundNoticeShown"`
 }
 
 func settingsPath(dir string) string { return filepath.Join(dir, "settings.json") }

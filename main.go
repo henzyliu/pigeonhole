@@ -4,11 +4,14 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	goruntime "runtime"
+	"slices"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
+	"unified-inbox/internal/autostart"
 	"unified-inbox/internal/inbox"
 )
 
@@ -30,8 +33,10 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to initialize inbox")
 	}
 	settings := loadSettings(dir)
-	app := NewApp(svc, dir, settings)
-	background, macOptions, windowsOptions := windowAppearance(settings.Theme)
+	// Launched at login (see internal/autostart): start hidden.
+	background := slices.Contains(os.Args[1:], autostart.BackgroundFlag)
+	app := NewApp(svc, dir, settings, background)
+	backgroundColour, macOptions, windowsOptions := windowAppearance(settings.Theme)
 
 	err = wails.Run(&options.App{
 		Title:     "Pigeonhole",
@@ -43,9 +48,20 @@ func main() {
 			Assets:  assets,
 			Handler: svc.MediaHandler(),
 		},
-		BackgroundColour: background,
-		Mac:              macOptions,
-		Windows:          windowsOptions,
+		BackgroundColour: backgroundColour,
+		// Closing the window keeps Pigeonhole running; quit from the menu
+		// bar / tray icon (or ⌘Q on macOS). See background.go.
+		HideWindowOnClose: true,
+		// macOS hides the app itself when started at login (so the Dock
+		// icon still brings it back); Windows starts the window hidden.
+		StartHidden: background && goruntime.GOOS == "windows",
+		// Opening Pigeonhole again shows the running copy.
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "com.pigeonhole.app",
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.showWindow() },
+		},
+		Mac:     macOptions,
+		Windows: windowsOptions,
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
