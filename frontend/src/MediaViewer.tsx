@@ -9,13 +9,17 @@ const STEP = 1.5;
 type View = {scale: number; x: number; y: number};
 const FIT: View = {scale: 1, x: 0, y: 0};
 
-// A full-window view of a chat's photos: the one you clicked, fitted to the
-// window, with the chat's other photos a step away (arrow keys or the side
-// buttons). Pinch, scroll, double-click or +/- zoom toward the pointer, and
-// dragging pans. Open hands it to the computer's photo viewer; Save asks where.
-export default function ImageViewer(props: {images: inbox.Message[]; index: number; onIndex: (i: number) => void; onClose: () => void}) {
-    const {images, index} = props;
-    const image = images[index];
+// A full-window view of a chat's photos and videos: the one you opened,
+// fitted to the window, with the chat's others a step away (arrow keys or the
+// side buttons). Photos zoom toward the pointer with pinch, scroll,
+// double-click or +/-, and dragging pans; videos play with their controls.
+// Open hands it to the computer's default app; Save asks where.
+export default function MediaViewer(props: {items: inbox.Message[]; index: number; onIndex: (i: number) => void; onClose: () => void}) {
+    const {items, index} = props;
+    const item = items[index];
+    const isVideo = item?.kind === 'video';
+    const isVideoRef = useRef(isVideo);
+    isVideoRef.current = isVideo;
     const [error, setError] = useState('');
     const [view, setView] = useState<View>(FIT);
     // Animate discrete zooms (buttons, keys, double-click), not continuous ones.
@@ -28,7 +32,7 @@ export default function ImageViewer(props: {images: inbox.Message[]; index: numb
     // Set after a drag so the click that ends it doesn't close the viewer.
     const justDragged = useRef(false);
     const hasPrev = index > 0;
-    const hasNext = index < images.length - 1;
+    const hasNext = index < items.length - 1;
 
     useEffect(() => {
         setView(FIT);
@@ -50,7 +54,7 @@ export default function ImageViewer(props: {images: inbox.Message[]; index: numb
     const zoomTo = useCallback((scale: number, clientX?: number, clientY?: number, animate = false) => {
         const img = imgRef.current;
         const stage = stageRef.current;
-        if (!img || !stage) return;
+        if (!img || !stage || isVideoRef.current) return;
         const v = viewRef.current;
         const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
         // The photo's untransformed centre, which scale and translate act on.
@@ -90,6 +94,7 @@ export default function ImageViewer(props: {images: inbox.Message[]; index: numb
         let pinching = false;
         let pinchStart = 1;
         const onWheel = (e: WheelEvent) => {
+            if (isVideoRef.current) return;
             e.preventDefault();
             if (pinching) return;
             const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002));
@@ -97,11 +102,13 @@ export default function ImageViewer(props: {images: inbox.Message[]; index: numb
         };
         type GestureEvent = Event & {scale: number; clientX: number; clientY: number};
         const onGestureStart = (e: Event) => {
+            if (isVideoRef.current) return;
             e.preventDefault();
             pinching = true;
             pinchStart = viewRef.current.scale;
         };
         const onGestureChange = (e: Event) => {
+            if (isVideoRef.current) return;
             e.preventDefault();
             const g = e as GestureEvent;
             zoomTo(pinchStart * g.scale, g.clientX, g.clientY);
@@ -151,7 +158,7 @@ export default function ImageViewer(props: {images: inbox.Message[]; index: numb
         props.onClose();
     };
 
-    if (!image) return null;
+    if (!item) return null;
     const run = (fn: () => Promise<void>) => fn().catch(e => setError(errorText(e)));
     const zoomed = view.scale > MIN_SCALE;
 
@@ -159,50 +166,53 @@ export default function ImageViewer(props: {images: inbox.Message[]; index: numb
         <div className="viewer" onClick={close}>
             <div className="viewer-bar" onClick={e => e.stopPropagation()}>
                 <div className="viewer-info">
-                    <div>{image.isMe ? 'You' : image.senderName}</div>
+                    <div>{item.isMe ? 'You' : item.senderName}</div>
                     <div className="viewer-date">
-                        {new Date(image.ts).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
-                        {images.length > 1 && ` · ${index + 1} of ${images.length}`}
+                        {new Date(item.ts).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}
+                        {items.length > 1 && ` · ${index + 1} of ${items.length}`}
                     </div>
                 </div>
                 {error && <div className="viewer-error">{error}</div>}
-                <div className="viewer-zoom">
+                {!isVideo && <div className="viewer-zoom">
                     <button className="viewer-button" aria-label="Zoom out" title="Zoom out (−)" disabled={!zoomed}
                             onClick={() => zoomTo(view.scale / STEP, undefined, undefined, true)}>−</button>
                     <button className="viewer-button viewer-percent" title="Fit to window (0)"
                             onClick={() => zoomTo(MIN_SCALE, undefined, undefined, true)}>{Math.round(view.scale * 100)}%</button>
                     <button className="viewer-button" aria-label="Zoom in" title="Zoom in (+)" disabled={view.scale >= MAX_SCALE}
                             onClick={() => zoomTo(view.scale * STEP, undefined, undefined, true)}>+</button>
-                </div>
-                <button className="viewer-button" title="Open in your default app for photos"
-                        onClick={() => run(() => Go.OpenMedia(image.mediaUrl, image.fileName))}>Open</button>
-                <button className="viewer-button" onClick={() => run(() => Go.SaveMedia(image.mediaUrl, image.fileName))}>Save</button>
+                </div>}
+                <button className="viewer-button" title={`Open in your default app for ${isVideo ? 'videos' : 'photos'}`}
+                        onClick={() => run(() => Go.OpenMedia(item.mediaUrl, item.fileName))}>Open</button>
+                <button className="viewer-button" onClick={() => run(() => Go.SaveMedia(item.mediaUrl, item.fileName))}>Save</button>
                 <button className="viewer-button" aria-label="Close" title="Close (Esc)" onClick={props.onClose}>✕</button>
             </div>
             <div className="viewer-stage" ref={stageRef}>
                 {hasPrev && (
-                    <button className="viewer-nav prev" aria-label="Previous photo" onClick={e => {
+                    <button className="viewer-nav prev" aria-label="Previous" onClick={e => {
                         e.stopPropagation();
                         props.onIndex(index - 1);
                     }}>‹</button>
                 )}
-                <img key={image.eventId} ref={imgRef} src={image.mediaUrl} alt={image.fileName} draggable={false}
+                {isVideo
+                    ? <video key={item.eventId} className="viewer-video" src={item.mediaUrl} controls autoPlay
+                             onClick={e => e.stopPropagation()}/>
+                    : <img key={item.eventId} ref={imgRef} src={item.mediaUrl} alt={item.fileName} draggable={false}
                      className={`${zoomed ? 'zoomed' : ''} ${dragging ? 'dragging' : ''} ${smooth ? 'smooth' : ''}`}
                      style={{transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`}}
                      onClick={e => e.stopPropagation()}
                      onMouseDown={startDrag}
                      onDoubleClick={e => zoomed
                          ? zoomTo(MIN_SCALE, undefined, undefined, true)
-                         : zoomTo(2.5, e.clientX, e.clientY, true)}/>
+                         : zoomTo(2.5, e.clientX, e.clientY, true)}/>}
                 {hasNext && (
-                    <button className="viewer-nav next" aria-label="Next photo" onClick={e => {
+                    <button className="viewer-nav next" aria-label="Next" onClick={e => {
                         e.stopPropagation();
                         props.onIndex(index + 1);
                     }}>›</button>
                 )}
             </div>
-            {image.body && (
-                <div className="viewer-caption" onClick={e => e.stopPropagation()}>{image.body}</div>
+            {item.body && (
+                <div className="viewer-caption" onClick={e => e.stopPropagation()}>{item.body}</div>
             )}
         </div>
     );

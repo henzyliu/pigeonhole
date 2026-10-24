@@ -1,7 +1,7 @@
 import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
-import ImageViewer from './ImageViewer';
+import MediaViewer from './MediaViewer';
 import NetworkIcon from './NetworkIcon';
 
 const PAGE = 50;
@@ -14,7 +14,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
     const [error, setError] = useState('');
     const [hasMore, setHasMore] = useState(true);
-    // The photo open in the full-window viewer, by event ID.
+    // The photo or video open in the full-window viewer, by event ID.
     const [viewing, setViewing] = useState<string | null>(null);
     const scroller = useRef<HTMLDivElement>(null);
     const composer = useRef<HTMLTextAreaElement>(null);
@@ -138,8 +138,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         Go.React(chat.roomId, msg.eventId, key).catch(e => setError(errorText(e)));
 
     const byId = new Map(messages.map(m => [m.eventId, m]));
-    const images = messages.filter(m => m.kind === 'image' && m.mediaUrl && !m.redacted);
-    const viewingIndex = images.findIndex(m => m.eventId === viewing);
+    const media = messages.filter(m => (m.kind === 'image' || m.kind === 'video') && m.mediaUrl && !m.redacted);
+    const viewingIndex = media.findIndex(m => m.eventId === viewing);
     // Sent / Delivered only shows under your newest message, like Messenger.
     const latestMine = [...messages].reverse().find(m => m.isMe && !m.redacted)?.eventId;
 
@@ -174,7 +174,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => startReply(m)} onReact={key => react(m, key)}
-                                        onOpenImage={() => setViewing(m.eventId)}
+                                        onOpenMedia={() => setViewing(m.eventId)}
                                         onFetch={() => Go.ResolveMedia(chat.roomId, m.eventId)}/>
                         </Fragment>
                     );
@@ -201,8 +201,8 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                 <button className="primary" onClick={send} disabled={!draft.trim()}>Send</button>
             </div>
             {viewingIndex >= 0 && (
-                <ImageViewer images={images} index={viewingIndex}
-                             onIndex={i => setViewing(images[i].eventId)} onClose={() => setViewing(null)}/>
+                <MediaViewer items={media} index={viewingIndex}
+                             onIndex={i => setViewing(media[i].eventId)} onClose={() => setViewing(null)}/>
             )}
         </section>
     );
@@ -222,7 +222,7 @@ function MessageRow(props: {
     replied?: inbox.Message;
     onReply: () => void;
     onReact: (key: string) => void;
-    onOpenImage: () => void;
+    onOpenMedia: () => void;
     onFetch: () => Promise<void>;
 }) {
     const {msg} = props;
@@ -259,7 +259,7 @@ function MessageRow(props: {
                 )}
                 <div className="msg-line">
                     <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''}`} title={new Date(msg.ts).toLocaleString()}>
-                        <MessageBody msg={msg} onOpenImage={props.onOpenImage} onFetch={props.onFetch}/>
+                        <MessageBody msg={msg} onOpenMedia={props.onOpenMedia} onFetch={props.onFetch}/>
                     </div>
                     {!msg.redacted && (
                         <div className="msg-actions" role="toolbar" ref={actionsRef}>
@@ -342,12 +342,12 @@ function SeenBy(props: {readers: inbox.Reader[]; isDm: boolean; isMe: boolean}) 
     );
 }
 
-function MessageBody({msg, onOpenImage, onFetch}: {msg: inbox.Message; onOpenImage: () => void; onFetch: () => Promise<void>}) {
+function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMedia: () => void; onFetch: () => Promise<void>}) {
     if (msg.redacted) return <em>Message deleted</em>;
     const caption = msg.body ? <div className="caption">{linkify(msg.body)}</div> : null;
     switch (msg.kind) {
         case 'image': {
-            const img = <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenImage}
+            const img = <img className="media zoomable" src={msg.mediaUrl} alt={msg.fileName} loading="lazy" onClick={onOpenMedia}
                              style={msg.width && msg.height ? {aspectRatio: `${msg.width} / ${msg.height}`} : undefined}/>;
             return <>
                 {msg.fetchable ? <Fetchable kind={msg.fetchable} onFetch={onFetch}>{img}</Fetchable> : img}
@@ -355,7 +355,7 @@ function MessageBody({msg, onOpenImage, onFetch}: {msg: inbox.Message; onOpenIma
             </>;
         }
         case 'video':
-            return <><video className="media" src={msg.mediaUrl} controls preload="metadata"/>{caption}</>;
+            return <><InlineVideo src={msg.mediaUrl} onExpand={onOpenMedia}/>{caption}</>;
         case 'audio':
             return <audio src={msg.mediaUrl} controls preload="metadata"/>;
         case 'file':
@@ -410,6 +410,26 @@ function Fetchable(props: {kind: string; onFetch: () => Promise<void>; children:
                 {state === 'loading' ? 'Loading…' : state === 'failed' ? 'Try again' : <>▶ {FETCH_LABELS[props.kind] ?? 'Load'}</>}
             </button>
             {state === 'failed' && <div className="fetch-error">{error}</div>}
+        </div>
+    );
+}
+
+// A video in the chat, with a button to watch it full-window. Clicking the
+// video itself plays it in place, so expanding needs its own button.
+function InlineVideo(props: {src: string; onExpand: () => void}) {
+    const video = useRef<HTMLVideoElement>(null);
+    return (
+        <div className="inline-video">
+            <video ref={video} className="media" src={props.src} controls preload="metadata"/>
+            <button className="expand-button" aria-label="Open full window" title="Open full window" onClick={() => {
+                video.current?.pause();
+                props.onExpand();
+            }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                </svg>
+            </button>
         </div>
     );
 }

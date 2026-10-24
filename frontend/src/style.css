@@ -241,6 +241,15 @@ button.thread-hide:hover { color: var(--fg); }
 .bubble.redacted { background: transparent !important; color: var(--fg-muted) !important; border: 1px dashed var(--border); }
 .media { display: block; max-width: 100%; max-height: 360px; border-radius: 14px; }
 .media.zoomable { cursor: zoom-in; }
+/* Corner button to watch a chat video full-window; shows on hover. */
+.inline-video { position: relative; width: fit-content; max-width: 100%; }
+button.expand-button {
+    position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 8px; border: none;
+    display: grid; place-items: center; padding: 0;
+    background: rgba(0, 0, 0, 0.55); color: #fff; opacity: 0; transition: opacity 0.12s;
+}
+.inline-video:hover button.expand-button, button.expand-button:focus-visible { opacity: 1; }
+button.expand-button:hover { background: rgba(0, 0, 0, 0.75); }
 /* Play / load button over a shared reel's thumbnail. */
 /* Sized to the thumbnail, not the bubble (a long caption widens that). */
 .fetchable { position: relative; width: fit-content; max-width: 100%; }
@@ -278,6 +287,7 @@ button.viewer-button:hover { background: rgba(255, 255, 255, 0.18); }
     max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px;
     cursor: zoom-in; user-select: none; will-change: transform;
 }
+.viewer-video { max-width: 100%; max-height: 100%; border-radius: 6px; background: #000; }
 .viewer-stage img.zoomed { cursor: grab; }
 .viewer-stage img.dragging { cursor: grabbing; }
 .viewer-stage img.smooth { transition: transform 0.15s ease-out; }
