@@ -242,7 +242,8 @@ button.thread-hide:hover { color: var(--fg); }
 .media { display: block; max-width: 100%; max-height: 360px; border-radius: 14px; }
 .media.zoomable { cursor: zoom-in; }
 /* Play / load button over a shared reel's thumbnail. */
-.fetchable { position: relative; }
+/* Sized to the thumbnail, not the bubble (a long caption widens that). */
+.fetchable { position: relative; width: fit-content; max-width: 100%; }
 button.fetch-button {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     border: none; border-radius: 999px; padding: 8px 16px;
