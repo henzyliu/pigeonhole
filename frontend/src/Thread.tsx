@@ -356,7 +356,7 @@ function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMed
             </>;
         }
         case 'video':
-            return <><InlineVideo src={msg.mediaUrl} onExpand={onOpenMedia}/>{caption}</>;
+            return <><InlineVideo msg={msg} onExpand={onOpenMedia}/>{caption}</>;
         case 'audio':
             return <audio src={msg.mediaUrl} controls preload="metadata"/>;
         case 'file':
@@ -372,6 +372,9 @@ function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMed
             return <>{linkify(msg.body)}{msg.edited && <span className="edited"> (edited)</span>}</>;
     }
 }
+
+// Matches .media's max-height.
+const VIDEO_MAX_HEIGHT = 360;
 
 const FETCH_LABELS: Record<string, string> = {reel: 'Play reel', story: 'Load story', post: 'Load post'};
 
@@ -405,11 +408,20 @@ function Fetchable(props: {kind: string; onFetch: () => Promise<void>; children:
 
 // A video in the chat, with a button to watch it full-window. Clicking the
 // video itself plays it in place, so expanding needs its own button.
-function InlineVideo(props: {src: string; onExpand: () => void}) {
+//
+// Until the file loads, a video has no size or picture of its own, so it
+// would collapse to a small blank box and then jump to full size (most
+// visibly when a fetched reel replaces its thumbnail). The stored size and
+// thumbnail fill in until then.
+function InlineVideo(props: {msg: inbox.Message; onExpand: () => void}) {
+    const {msg} = props;
     const video = useRef<HTMLVideoElement>(null);
+    const sized = msg.width > 0 && msg.height > 0;
+    const style = sized ? {aspectRatio: `${msg.width} / ${msg.height}`, height: Math.min(VIDEO_MAX_HEIGHT, msg.height)} : undefined;
     return (
         <div className="inline-video">
-            <video ref={video} className="media" src={props.src} controls preload="metadata"/>
+            <video ref={video} className="media" src={msg.mediaUrl} poster={msg.thumbnail || undefined} style={style}
+                   controls preload="metadata"/>
             <button className="expand-button" aria-label="Open full window" title="Open full window" onClick={() => {
                 video.current?.pause();
                 props.onExpand();

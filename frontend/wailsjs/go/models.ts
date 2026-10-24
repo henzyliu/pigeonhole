@@ -217,6 +217,7 @@ export namespace inbox {
 	    fileName: string;
 	    width: number;
 	    height: number;
+	    thumbnail: string;
 	    status: string;
 	    edited: boolean;
 	    redacted: boolean;
@@ -243,6 +244,7 @@ export namespace inbox {
 	        this.fileName = source["fileName"];
 	        this.width = source["width"];
 	        this.height = source["height"];
+	        this.thumbnail = source["thumbnail"];
 	        this.status = source["status"];
 	        this.edited = source["edited"];
 	        this.redacted = source["redacted"];

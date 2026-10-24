@@ -51,23 +51,25 @@ type Reaction struct {
 }
 
 type Message struct {
-	EventID      string     `json:"eventId"`
-	SenderName   string     `json:"senderName"`
-	SenderAvatar string     `json:"senderAvatar"`
-	IsMe         bool       `json:"isMe"`
-	TS           int64      `json:"ts"`
-	Kind         string     `json:"kind"` // text, notice, emote, image, video, audio, file
-	Body         string     `json:"body"`
-	MediaURL     string     `json:"mediaUrl"`
-	MimeType     string     `json:"mimeType"`
-	FileName     string     `json:"fileName"`
-	Width        int        `json:"width"`
-	Height       int        `json:"height"`
-	Status       string     `json:"status"`
-	Edited       bool       `json:"edited"`
-	Redacted     bool       `json:"redacted"`
-	ReplyTo      string     `json:"replyTo"`
-	Reactions    []Reaction `json:"reactions"`
+	EventID      string `json:"eventId"`
+	SenderName   string `json:"senderName"`
+	SenderAvatar string `json:"senderAvatar"`
+	IsMe         bool   `json:"isMe"`
+	TS           int64  `json:"ts"`
+	Kind         string `json:"kind"` // text, notice, emote, image, video, audio, file
+	Body         string `json:"body"`
+	MediaURL     string `json:"mediaUrl"`
+	MimeType     string `json:"mimeType"`
+	FileName     string `json:"fileName"`
+	Width        int    `json:"width"`
+	Height       int    `json:"height"`
+	// Thumbnail is a video's still image, shown until it loads.
+	Thumbnail string     `json:"thumbnail"`
+	Status    string     `json:"status"`
+	Edited    bool       `json:"edited"`
+	Redacted  bool       `json:"redacted"`
+	ReplyTo   string     `json:"replyTo"`
+	Reactions []Reaction `json:"reactions"`
 	// SeenBy lists the people whose read position is this message.
 	SeenBy []Reader `json:"seenBy"`
 	// Fetchable is set on a shared Instagram reel, story or post that was
@@ -330,6 +332,11 @@ func fillContent(m *Message, evtType, raw string) {
 		m.MediaURL = MediaURL(string(uri))
 		if msg.Info != nil {
 			m.MimeType, m.Width, m.Height = msg.Info.MimeType, msg.Info.Width, msg.Info.Height
+			thumb := msg.Info.ThumbnailURL
+			if msg.Info.ThumbnailFile != nil {
+				thumb = msg.Info.ThumbnailFile.URL
+			}
+			m.Thumbnail = MediaURL(string(thumb))
 		}
 	}
 	if _, unresolved := content.Raw[unresolvedMediaKey]; unresolved {
