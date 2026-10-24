@@ -169,9 +169,22 @@ a { color: inherit; }
 .context-menu button:hover { background: var(--bg-hover); }
 .chat-list-empty { flex: 1; padding: 32px 24px; color: var(--fg-muted); text-align: center; line-height: 1.5; }
 .chat-row {
-    display: flex; gap: 12px; align-items: center;
+    position: relative; display: flex; gap: 12px; align-items: center;
     padding: 9px 10px; border-radius: 12px; cursor: pointer;
 }
+/* The ⋯ button takes the time's place while hovering (or while its menu is
+   open), leaving the unread badge below visible. */
+button.row-menu-button {
+    position: absolute; top: 6px; right: 8px; width: 28px; height: 28px; padding: 0;
+    display: grid; place-items: center; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg-muted);
+    opacity: 0; pointer-events: none; transition: opacity 0.1s;
+}
+.chat-row:hover button.row-menu-button, .chat-row.menu-open button.row-menu-button, button.row-menu-button:focus-visible {
+    opacity: 1; pointer-events: auto;
+}
+button.row-menu-button:hover { color: var(--fg); }
+.chat-row:hover .chat-time, .chat-row.menu-open .chat-time { visibility: hidden; }
 .chat-row:hover { background: var(--bg-hover); }
 .chat-row.selected { background: var(--bg-selected); }
 .chat-row-body { flex: 1; min-width: 0; }

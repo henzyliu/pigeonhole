@@ -10,7 +10,7 @@ export default function ChatList(props: {
     onSetHidden: (roomId: string, hidden: boolean) => void;
     emptyText: string;
 }) {
-    // The right-click menu, at the pointer. Acting from here doesn't open the
+    // The chat's ⋯ menu, shown on hover. Acting from here doesn't open the
     // chat, so nothing is marked as read.
     const [menu, setMenu] = useState<{chat: inbox.Chat; x: number; y: number} | null>(null);
 
@@ -22,12 +22,8 @@ export default function ChatList(props: {
         <ul className="chat-list" onScroll={() => setMenu(null)}>
             {props.chats.map(chat => (
                 <li key={chat.roomId}
-                    className={`chat-row ${chat.roomId === props.selected ? 'selected' : ''} ${chat.unread > 0 ? 'unread' : ''}`}
-                    onClick={() => props.onSelect(chat.roomId)}
-                    onContextMenu={e => {
-                        e.preventDefault();
-                        setMenu({chat, x: e.clientX, y: e.clientY});
-                    }}>
+                    className={`chat-row ${chat.roomId === props.selected ? 'selected' : ''} ${chat.unread > 0 ? 'unread' : ''} ${menu?.chat.roomId === chat.roomId ? 'menu-open' : ''}`}
+                    onClick={() => props.onSelect(chat.roomId)}>
                     <Avatar name={chat.name} src={chat.avatar} size={44} network={chat.network}/>
                     <div className="chat-row-body">
                         <div className="chat-row-top">
@@ -41,11 +37,22 @@ export default function ChatList(props: {
                                 : <LatestStatus chat={chat}/>}
                         </div>
                     </div>
+                    <button className="row-menu-button" aria-label="Chat options" title="More"
+                            aria-haspopup="menu" aria-expanded={menu?.chat.roomId === chat.roomId}
+                            onClick={e => {
+                                e.stopPropagation();
+                                const r = e.currentTarget.getBoundingClientRect();
+                                setMenu(m => m?.chat.roomId === chat.roomId ? null : {chat, x: r.right, y: r.bottom + 4});
+                            }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+                        </svg>
+                    </button>
                 </li>
             ))}
         </ul>
         {menu && (
-            <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[{
+            <ContextMenu x={menu.x} y={menu.y} alignRight onClose={() => setMenu(null)} items={[{
                 label: menu.chat.hidden ? 'Unhide chat' : 'Hide chat',
                 onClick: () => props.onSetHidden(menu.chat.roomId, !menu.chat.hidden),
             }]}/>
@@ -54,9 +61,16 @@ export default function ChatList(props: {
     );
 }
 
-// A small menu at the pointer, kept inside the window. It closes on a pick,
-// a click elsewhere, Escape, or the window losing focus.
-function ContextMenu(props: {x: number; y: number; items: {label: string; onClick: () => void}[]; onClose: () => void}) {
+// A small menu below its button (alignRight lines its right edge up with x),
+// kept inside the window. It closes on a pick, a click elsewhere, Escape, or
+// the window losing focus.
+function ContextMenu(props: {
+    x: number;
+    y: number;
+    alignRight?: boolean;
+    items: {label: string; onClick: () => void}[];
+    onClose: () => void;
+}) {
     const ref = useRef<HTMLDivElement>(null);
     const [pos, setPos] = useState({left: props.x, top: props.y});
 
@@ -64,13 +78,17 @@ function ContextMenu(props: {x: number; y: number; items: {label: string; onClic
         const el = ref.current;
         if (el) {
             const margin = 8;
+            const left = props.alignRight ? props.x - el.offsetWidth : props.x;
             setPos({
-                left: Math.min(props.x, window.innerWidth - el.offsetWidth - margin),
+                left: Math.max(margin, Math.min(left, window.innerWidth - el.offsetWidth - margin)),
                 top: Math.min(props.y, window.innerHeight - el.offsetHeight - margin),
             });
         }
+        // The ⋯ button toggles the menu itself, so a press on it isn't
+        // "elsewhere".
         const onDown = (e: MouseEvent) => {
-            if (!ref.current?.contains(e.target as Node)) props.onClose();
+            const target = e.target as Element;
+            if (!ref.current?.contains(target) && !target.closest?.('.row-menu-button')) props.onClose();
         };
         const onKey = (e: KeyboardEvent) => {
             if (e.key === 'Escape') props.onClose();
@@ -83,7 +101,7 @@ function ContextMenu(props: {x: number; y: number; items: {label: string; onClic
             document.removeEventListener('keydown', onKey);
             window.removeEventListener('blur', props.onClose);
         };
-    }, [props.x, props.y, props.onClose]);
+    }, [props.x, props.y, props.alignRight, props.onClose]);
 
     return (
         <div ref={ref} className="context-menu" role="menu" style={pos} onContextMenu={e => e.preventDefault()}>
