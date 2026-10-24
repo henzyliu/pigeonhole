@@ -1,6 +1,7 @@
 import {Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
-import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
+import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
+import {linkify} from './links';
 import MediaViewer from './MediaViewer';
 import NetworkIcon from './NetworkIcon';
 
@@ -370,18 +371,6 @@ function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMed
         default:
             return <>{linkify(msg.body)}{msg.edited && <span className="edited"> (edited)</span>}</>;
     }
-}
-
-const URL_RE = /(https?:\/\/[^\s]+)/g;
-
-// Links open in the default browser. A plain target="_blank" link does
-// nothing in the Mac webview and opens a bare Edge window on Windows.
-function linkify(text: string) {
-    return text.split(URL_RE).map((part, i) =>
-        i % 2 === 1 ? <a key={i} href={part} onClick={e => {
-            e.preventDefault();
-            BrowserOpenURL(part);
-        }}>{part}</a> : part);
 }
 
 const FETCH_LABELS: Record<string, string> = {reel: 'Play reel', story: 'Load story', post: 'Load post'};

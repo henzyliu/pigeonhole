@@ -1,5 +1,6 @@
 import {formatTime, inbox} from './api';
 import Avatar from './Avatar';
+import {splitLinks} from './links';
 
 export default function ChatList(props: {
     chats: inbox.Chat[];
@@ -23,7 +24,7 @@ export default function ChatList(props: {
                             <span className="chat-time">{formatTime(chat.lastTs)}</span>
                         </div>
                         <div className="chat-row-bottom">
-                            <span className="chat-preview">{chat.lastFromMe && 'You: '}{chat.preview}</span>
+                            <span className="chat-preview">{chat.lastFromMe && 'You: '}{plainPreview(chat.preview)}</span>
                             {chat.unread > 0
                                 ? <span className="badge">{chat.unread > 99 ? '99+' : chat.unread}</span>
                                 : <LatestStatus chat={chat}/>}
@@ -71,4 +72,9 @@ function Check() {
             <path d="M2.5 6.5 5 9l4.5-6"/>
         </svg>
     );
+}
+
+// Previews are plain text, so links show as their short labels.
+function plainPreview(text: string): string {
+    return splitLinks(text).map(seg => seg.text).join('');
 }
