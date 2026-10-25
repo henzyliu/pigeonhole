@@ -194,4 +194,44 @@ Homebrew's `makensis` crashes unless `LANG` is a UTF-8 locale (e.g.
   ```
 - Discord doesn't allow unofficial clients ("self-bots"), so a Discord account
   used here could be flagged. Its bridge is unreleased upstream and may break.
-- mautrix-meta, mautrix-whatsapp and mautrix-discord are AGPL-3.0, so this app is too if you distribute it.
+- For licensing, see [Licence](#licence) below.
+
+## Licence
+
+Copyright © 2026 Henry Liu.
+
+Pigeonhole is free software: you can redistribute it and/or modify it under the
+terms of the **GNU Affero General Public License, version 3 or (at your option)
+any later version**, as published by the Free Software Foundation. It's
+distributed in the hope that it will be useful, but **without any warranty**;
+without even the implied warranty of merchantability or fitness for a particular
+purpose. See [`LICENSE`](LICENSE) for the full text.
+
+In short: you can use, share and change Pigeonhole, but if you give anyone a copy
+(changed or not), you must offer them its source code under these same terms.
+The source is this repository.
+
+Pigeonhole is AGPL because it's built on the
+[mautrix](https://github.com/mautrix) bridges, which are licensed under the
+AGPL-3.0-or-later. Pigeonhole also includes or uses:
+
+| Project | Used for | Licence |
+|---|---|---|
+| [mautrix-meta](https://github.com/mautrix/meta) (a modified copy in `third_party/mautrix-meta`) | Messenger and Instagram | AGPL-3.0-or-later |
+| [mautrix-whatsapp](https://github.com/mautrix/whatsapp) | WhatsApp | AGPL-3.0-or-later |
+| [mautrix-discord](https://github.com/mautrix/discord) | Discord | AGPL-3.0-or-later |
+| [mautrix-go](https://github.com/mautrix/go) and [go.mau.fi/util](https://github.com/mautrix/go-util) | The bridge framework | MPL-2.0 |
+| [whatsmeow](https://github.com/tulir/whatsmeow) | The WhatsApp protocol | MPL-2.0 |
+| [discordgo](https://github.com/bwmarrin/discordgo) (Beeper's fork) | The Discord protocol | BSD-3-Clause |
+| [Wails](https://github.com/wailsapp/wails) and [go-webview2](https://github.com/wailsapp/go-webview2) | The desktop app shell | MIT |
+| [go-sqlite3](https://github.com/mattn/go-sqlite3) | Local storage (SQLite) | MIT |
+| [React](https://react.dev) | The interface | MIT |
+| [zerolog](https://github.com/rs/zerolog), [go-qrcode](https://github.com/skip2/go-qrcode), [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) | Logging, QR codes, image handling | MIT / MIT / BSD-3-Clause |
+
+Each project keeps its own copyright and licence (in its source, or in
+`third_party/` for the copied one). The `third_party/mautrix-meta/LICENSE.exceptions`
+file grants extra rights to Beeper only; it doesn't apply to Pigeonhole.
+
+Pigeonhole isn't affiliated with or endorsed by Meta, WhatsApp, Discord or the
+mautrix project. Messenger, Instagram, WhatsApp and Discord are trademarks of
+their owners.
