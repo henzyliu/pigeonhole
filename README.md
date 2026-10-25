@@ -4,9 +4,44 @@ A desktop app (macOS + Windows) that shows your Messenger, Instagram, WhatsApp a
 Discord chats in one inbox, and lets you reply. Everything runs and is stored locally on your
 computer, so there's no server to host.
 
+**[⬇ Download the latest version](https://github.com/henzyliu/pigeonhole/releases/latest)** for Mac or Windows.
+
 The name: a pigeonhole is a mail-sorting slot, pigeons carry messages, and by
 the pigeonhole principle, putting several networks into one inbox means some
 hole ends up holding more than one pigeon.
+
+## Download
+
+Go to the **[latest release](https://github.com/henzyliu/pigeonhole/releases/latest)**
+(or the **Releases** section on the right of this page) and, under **Assets**,
+download the file for your computer:
+
+| Computer | File | Then |
+|---|---|---|
+| Mac (macOS 11 or later) | `Pigeonhole-<version>-mac.dmg` | Open it and drag Pigeonhole into Applications. |
+| Windows 10 or 11 | `Pigeonhole-<version>-windows-setup.exe` | Run it. It installs just for you, with no admin prompt. |
+| Windows, without installing | `Pigeonhole-<version>-windows-portable.zip` | Unzip it and run `Pigeonhole.exe`. |
+
+**The first time you open it** you'll see a warning, because the app isn't
+signed with a paid developer certificate. You only need to get past it once:
+
+- **Mac:** macOS says it can't check Pigeonhole for malware. Click **Done**, go to
+  System Settings → Privacy & Security, scroll down and click **Open Anyway**.
+- **Windows:** if Windows says it protected your PC, click **More info** →
+  **Run anyway**.
+
+Then click the person icon to connect your accounts. Pigeonhole keeps running in
+the menu bar (Mac) or by the clock (Windows) when you close its window, so you
+keep getting messages; quit it from that icon.
+
+**Updates install themselves:** when there's a new version, Pigeonhole tells you,
+and **Install update** in Settings downloads it and restarts the app. Your
+accounts and chats are kept. (Versions before 0.10.0 can't do this; download
+the latest version once by hand.)
+
+Your messages stay on your computer. Connecting uses the same unofficial method
+as the mautrix bridges, which the networks don't officially allow, so there's a
+small risk of an account being asked to verify a login or being flagged.
 
 ## How it works
 
