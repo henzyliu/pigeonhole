@@ -112,6 +112,8 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+    # The AGPL's text goes with every copy (see LICENSE at the repo root).
+    File "/oname=LICENSE.txt" "..\..\..\LICENSE"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

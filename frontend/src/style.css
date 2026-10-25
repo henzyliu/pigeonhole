@@ -565,3 +565,5 @@ button.switch.on .switch-knob { transform: translateX(16px); }
 .update-banner span { color: var(--accent); font-weight: 600; margin-left: 4px; }
 .setting.about { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px; user-select: text; }
 .about-version { font-weight: 600; flex-shrink: 0; }
+.about-licence { margin-top: 4px; }
+.about-licence button.link { font-size: inherit; }

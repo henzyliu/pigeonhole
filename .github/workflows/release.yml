@@ -77,6 +77,9 @@ jobs:
           mkdir -p dist dmg
           cp -R build/bin/Pigeonhole.app dmg/
           ln -s /Applications dmg/Applications
+          # The AGPL's text goes with every copy. It sits beside the app, not
+          # inside it: adding files to the signed bundle would break its seal.
+          cp LICENSE dmg/LICENSE.txt
           # An explicit size: hdiutil's own estimate sometimes fails on CI
           # with "No space left on device". One retry for its other flakes.
           size=$(( $(du -sm dmg | cut -f1) + 40 ))m
@@ -86,13 +89,15 @@ jobs:
             [ "$attempt" = 2 ] && exit 1
             sleep 5
           done
-      # The installer, and the bare exe (zipped) for anyone who'd rather not
-      # install.
+      # The installer (which installs LICENSE.txt beside the app), and the
+      # bare exe zipped with the licence for anyone who'd rather not install.
       - if: runner.os == 'Windows'
         run: |
-          mkdir -p dist
+          mkdir -p dist portable
           cp build/bin/Pigeonhole-amd64-installer.exe "dist/Pigeonhole-$VERSION-windows-setup.exe"
-          7z a "dist/Pigeonhole-$VERSION-windows-portable.zip" ./build/bin/Pigeonhole.exe
+          cp build/bin/Pigeonhole.exe portable/
+          cp LICENSE portable/LICENSE.txt
+          7z a "dist/Pigeonhole-$VERSION-windows-portable.zip" ./portable/*
       - uses: actions/upload-artifact@v4
         with:
           name: pigeonhole-${{ runner.os }}

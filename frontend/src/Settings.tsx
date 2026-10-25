@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {errorText, Go, inbox} from './api';
+import {BrowserOpenURL, errorText, Go, inbox} from './api';
 import NetworkIcon from './NetworkIcon';
 import {main} from '../wailsjs/go/models';
 import {applyTheme, Theme} from './theme';
@@ -157,6 +157,7 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                         <div>
                             <div className="setting-label">About</div>
                             <div className="muted setting-hint">{buildLine(version)}</div>
+                            <LicenceNotice/>
                         </div>
                         <div className="about-version">Pigeonhole {version.version}</div>
                     </div>
@@ -168,6 +169,22 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
 }
 
 const HIDDEN_TEXT = 'New message';
+
+const SOURCE_URL = 'https://github.com/henzyliu/pigeonhole';
+
+// The AGPL's "appropriate legal notices": the licence, no warranty, and
+// where to get the source.
+function LicenceNotice() {
+    const open = (url: string) => () => BrowserOpenURL(url);
+    return (
+        <div className="muted setting-hint about-licence">
+            Free software under the GNU AGPL v3 or later, with no warranty.{' '}
+            <button className="link" onClick={open(SOURCE_URL)}>Source code</button>
+            {' · '}
+            <button className="link" onClick={open(SOURCE_URL + '/blob/main/LICENSE')}>Licence</button>
+        </div>
+    );
+}
 
 // Where the app's icon lives while it runs in the background.
 function trayPlace(system: string): string {
