@@ -30,6 +30,11 @@ Unicode true
 ####
 ## !define REQUEST_EXECUTION_LEVEL "admin"            # Default "admin"  see also https://nsis.sourceforge.io/Docs/Chapter4.html
 ####
+# Pigeonhole installs for the current user (in %LocalAppData%\Programs), so
+# installing and updating need no administrator rights or permission prompt.
+!define REQUEST_EXECUTION_LEVEL "user"
+!define WAILS_INSTALL_SCOPE "user"
+####
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
@@ -55,6 +60,8 @@ ManifestDPIAware true
 # !define MUI_WELCOMEFINISHPAGE_BITMAP "resources\leftimage.bmp" #Include this to add a bitmap on the left side of the Welcome Page. Must be a size of 164x314
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}" # Offer to start Pigeonhole when done.
+!define MUI_FINISHPAGE_RUN_TEXT "Run ${INFO_PRODUCTNAME}"
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
@@ -87,8 +94,18 @@ Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
 
+# Pigeonhole keeps running in the notification area after its window is
+# closed, which locks its exe; close it so an update can replace the file.
+!macro closePigeonhole
+    nsExec::Exec 'taskkill /F /IM "${PRODUCT_EXECUTABLE}"'
+    Pop $0
+    Sleep 500
+!macroend
+
 Section
     !insertmacro wails.setShellContext
+
+    !insertmacro closePigeonhole
 
     !insertmacro wails.webview2runtime
 
@@ -107,6 +124,11 @@ SectionEnd
 
 Section "uninstall"
     !insertmacro wails.setShellContext
+
+    !insertmacro closePigeonhole
+    # The "Start at login" entry (see internal/autostart). Chats and logins in
+    # %AppData%\Pigeonhole are kept, in case it's reinstalled.
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${INFO_PRODUCTNAME}"
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
 

@@ -91,9 +91,39 @@ scripts/build.sh windows
 ```
 
 The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
-10 and 11 (plus WebView2, which they include). The GitHub Actions workflow in
-`.github/workflows/build.yml` builds the macOS app and a Windows installer
-(`-nsis`) when you push a `v*` tag or run it manually.
+10 and 11 (plus WebView2, which they include).
+
+## Releasing
+
+To share a version, push a tag for it:
+
+```bash
+git tag v0.9.1 && git push origin v0.9.1
+```
+
+`.github/workflows/release.yml` then builds on GitHub's Mac and Windows
+machines and publishes a [release](https://github.com/henzyliu/pigeonhole/releases)
+with:
+
+- `Pigeonhole-<version>-mac.dmg`: the app for Apple Silicon and Intel Macs
+  (macOS 11 or later), to drag into Applications;
+- `Pigeonhole-<version>-windows-setup.exe`: an installer that installs for the
+  current user (no admin prompt), closes a running Pigeonhole first, and adds
+  Start menu and desktop shortcuts;
+- `Pigeonhole-<version>-windows-portable.zip`: the bare exe.
+
+The tag has to match `info.productVersion` in `wails.json`, or the workflow
+stops before building. The release notes list the commits since the previous
+tag, followed by `.github/release-notes-install.md`, which explains the
+one-time warnings: neither app is signed, so macOS asks you to allow it under
+Privacy & Security and Windows SmartScreen asks you to "Run anyway". Running
+the workflow by hand (Actions → Release → Run workflow) builds everything
+without releasing, as a check.
+
+To build the installer locally, install NSIS (`brew install makensis`) and run
+`wails build -platform windows/amd64 -nsis` with the MinGW variables above.
+Homebrew's `makensis` crashes unless `LANG` is a UTF-8 locale (e.g.
+`LANG=en_US.UTF-8`).
 
 ## Notes
 

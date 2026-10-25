@@ -1,0 +1,123 @@
+name: Release
+
+# Pushing a version tag (git tag v0.9.0 && git push origin v0.9.0) builds the
+# Mac and Windows apps and publishes them as a GitHub Release, with the
+# changes since the previous tag. Running it by hand (Actions → Release →
+# Run workflow) builds them without releasing, as a check.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      # The tag must match wails.json, which Wails stamps into both apps.
+      - id: v
+        run: |
+          version=$(jq -r .info.productVersion wails.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match wails.json's version $version. Bump info.productVersion, or tag v$version."
+            exit 1
+          fi
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/universal
+          - os: windows-latest
+            platform: windows/amd64
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      CGO_ENABLED: "1"
+      # The oldest macOS the app supports (it uses macOS 11 APIs).
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+      # Wails builds the Windows installer with NSIS, which the runner has
+      # installed but not on PATH.
+      - if: runner.os == 'Windows'
+        run: echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+      # The commit, tag (or branch) and date show under Settings → About.
+      - run: >
+          wails build -clean -platform ${{ matrix.platform }} ${{ runner.os == 'Windows' && '-nsis' || '' }}
+          -ldflags "-X main.commit=${GITHUB_SHA::7} -X main.branch=${GITHUB_REF_NAME} -X main.buildDate=$(date -u +%Y-%m-%d)"
+      # A disk image with the app beside a shortcut to Applications, to drag
+      # it onto.
+      - if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist dmg
+          cp -R build/bin/Pigeonhole.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Pigeonhole $VERSION" -srcfolder dmg -ov -format UDZO "dist/Pigeonhole-$VERSION-mac.dmg"
+      # The installer, and the bare exe (zipped) for anyone who'd rather not
+      # install.
+      - if: runner.os == 'Windows'
+        run: |
+          mkdir -p dist
+          cp build/bin/Pigeonhole-amd64-installer.exe "dist/Pigeonhole-$VERSION-windows-setup.exe"
+          7z a "dist/Pigeonhole-$VERSION-windows-portable.zip" ./build/bin/Pigeonhole.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pigeonhole-${{ runner.os }}
+          path: dist/*
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      # Release notes: the commits since the previous tag, then how to get
+      # past the first-launch warnings (the apps aren't signed).
+      - run: |
+          previous=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            echo "## What's new"
+            echo
+            if [ -n "$previous" ]; then
+              git log --no-merges --pretty='- %s' "$previous..$GITHUB_REF_NAME"
+            else
+              echo "The first release."
+            fi
+            echo
+            cat .github/release-notes-install.md
+          } > notes.md
+          cat notes.md
+      - run: >
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --title "Pigeonhole $VERSION" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
