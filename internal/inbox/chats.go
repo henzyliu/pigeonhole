@@ -42,6 +42,11 @@ type Chat struct {
 	// HistoryLoading is set while the bridge is still fetching older
 	// messages for this chat.
 	HistoryLoading bool `json:"historyLoading"`
+	// Muted is set when muted in Pigeonhole (⋯ → Mute); MutedOnNetwork when
+	// muted in the network's own app. Either way it doesn't alert or count
+	// toward the app's unread badge.
+	Muted          bool `json:"muted"`
+	MutedOnNetwork bool `json:"mutedOnNetwork"`
 }
 
 type Reaction struct {
@@ -142,7 +147,8 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		return nil, err
 	}
 	rows, err := s.Store.DB.QueryContext(ctx, `
-		SELECT room_id, network, name, avatar, preview, last_ts, unread, is_dm, `+localmx.HiddenClause+`
+		SELECT room_id, network, name, avatar, preview, last_ts, unread, is_dm, `+localmx.HiddenClause+`,
+			local_muted, `+localmx.NetworkMutedClause+`
 		FROM rooms WHERE is_portal=1 ORDER BY last_ts DESC`)
 	if err != nil {
 		return nil, err
@@ -151,7 +157,8 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 	for rows.Next() {
 		var c Chat
 		var avatar string
-		if err = rows.Scan(&c.RoomID, &c.Network, &c.Name, &avatar, &c.Preview, &c.LastTS, &c.Unread, &c.IsDM, &c.Hidden); err != nil {
+		if err = rows.Scan(&c.RoomID, &c.Network, &c.Name, &avatar, &c.Preview, &c.LastTS, &c.Unread, &c.IsDM, &c.Hidden,
+			&c.Muted, &c.MutedOnNetwork); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -612,12 +619,19 @@ func (s *Service) React(ctx context.Context, roomID, eventID, key string) error 
 }
 
 // UnreadChats counts chats with unread messages, as the menu bar / tray
-// icon shows: hidden chats don't count.
+// icon shows: hidden and muted chats don't count.
 func (s *Service) UnreadChats(ctx context.Context) (int, error) {
 	var n int
 	err := s.Store.DB.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM rooms WHERE is_portal=1 AND unread>0 AND NOT "+localmx.HiddenClause).Scan(&n)
+		"SELECT COUNT(*) FROM rooms WHERE is_portal=1 AND unread>0 AND NOT "+localmx.HiddenClause+
+			" AND NOT "+localmx.MutedClause).Scan(&n)
 	return n, err
+}
+
+// SetMuted mutes a chat in Pigeonhole only (nothing changes on the
+// network), or unmutes it.
+func (s *Service) SetMuted(ctx context.Context, roomID string, muted bool) error {
+	return s.Store.SetLocalMuted(ctx, id.RoomID(roomID), muted)
 }
 
 // SetHidden hides a chat in Pigeonhole only; nothing changes on the network.

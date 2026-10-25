@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
-import {formatTime, inbox} from './api';
+import {formatTime, inbox, NETWORK_LABELS} from './api';
 import Avatar from './Avatar';
 import {splitLinks} from './links';
 
@@ -8,6 +8,7 @@ export default function ChatList(props: {
     selected: string;
     onSelect: (roomId: string) => void;
     onSetHidden: (roomId: string, hidden: boolean) => void;
+    onSetMuted: (roomId: string, muted: boolean) => void;
     emptyText: string;
 }) {
     // The chat's ⋯ menu, shown on hover. Acting from here doesn't open the
@@ -28,12 +29,13 @@ export default function ChatList(props: {
                     <div className="chat-row-body">
                         <div className="chat-row-top">
                             <span className="chat-name">{chat.name || 'Unnamed chat'}</span>
+                            {(chat.muted || chat.mutedOnNetwork) && <MutedIcon chat={chat}/>}
                             <span className="chat-time">{formatTime(chat.lastTs)}</span>
                         </div>
                         <div className="chat-row-bottom">
                             <span className="chat-preview">{chat.lastFromMe && 'You: '}{plainPreview(chat.preview)}</span>
                             {chat.unread > 0
-                                ? <span className="badge">{chat.unread > 99 ? '99+' : chat.unread}</span>
+                                ? <span className={`badge ${chat.muted || chat.mutedOnNetwork ? 'badge-muted' : ''}`}>{chat.unread > 99 ? '99+' : chat.unread}</span>
                                 : <LatestStatus chat={chat}/>}
                         </div>
                     </div>
@@ -53,6 +55,9 @@ export default function ChatList(props: {
         </ul>
         {menu && (
             <ContextMenu x={menu.x} y={menu.y} alignRight onClose={() => setMenu(null)} items={[{
+                label: menu.chat.muted ? 'Unmute chat' : 'Mute chat',
+                onClick: () => props.onSetMuted(menu.chat.roomId, !menu.chat.muted),
+            }, {
                 label: menu.chat.hidden ? 'Unhide chat' : 'Hide chat',
                 onClick: () => props.onSetHidden(menu.chat.roomId, !menu.chat.hidden),
             }]}/>
@@ -156,4 +161,21 @@ function Check() {
 // Previews are plain text, so links show as their short labels.
 function plainPreview(text: string): string {
     return splitLinks(text).map(seg => seg.text).join('');
+}
+
+// Shown beside a muted chat's name: muted in Pigeonhole (⋯ → Mute), or in
+// the network's own app, which Pigeonhole follows.
+function MutedIcon({chat}: {chat: inbox.Chat}) {
+    const where = chat.muted ? 'Muted in Pigeonhole' : `Muted in ${NETWORK_LABELS[chat.network] ?? chat.network}`;
+    return (
+        <svg className="chat-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={where}>
+            <title>{where}</title>
+            <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+            <path d="M18.6 13A17.9 17.9 0 0 1 18 8"/>
+            <path d="M6.3 6.3A5.9 5.9 0 0 0 6 8c0 7-3 9-3 9h14"/>
+            <path d="M18 8a6 6 0 0 0-9.3-5"/>
+            <path d="M2 2l20 20"/>
+        </svg>
+    );
 }

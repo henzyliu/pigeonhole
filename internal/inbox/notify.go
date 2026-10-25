@@ -32,11 +32,15 @@ func (s *Service) onIncoming(roomID id.RoomID, sender id.UserID, ts int64, previ
 	}
 	ctx := context.Background()
 	var name, network string
-	var isDM bool
+	var isDM, localMuted bool
 	var mutedUntil int64
-	err := s.Store.DB.QueryRowContext(ctx, "SELECT name, network, is_dm, muted_until FROM rooms WHERE room_id=? AND is_portal=1", roomID).
-		Scan(&name, &network, &isDM, &mutedUntil)
+	err := s.Store.DB.QueryRowContext(ctx,
+		"SELECT name, network, is_dm, muted_until, local_muted FROM rooms WHERE room_id=? AND is_portal=1", roomID).
+		Scan(&name, &network, &isDM, &mutedUntil, &localMuted)
 	if err != nil {
+		return
+	} else if localMuted {
+		s.Log.Debug().Str("room_id", string(roomID)).Msg("Not notifying: chat is muted in Pigeonhole")
 		return
 	} else if mutedUntil > time.Now().UnixMilli() {
 		s.Log.Debug().Str("room_id", string(roomID)).Msg("Not notifying: chat is muted")

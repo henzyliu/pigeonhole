@@ -219,6 +219,12 @@ func (a *App) ResolveMedia(roomID, eventID string) error {
 	return a.svc.ResolveMedia(a.ctx, roomID, eventID)
 }
 
+// SetChatMuted mutes a chat in Pigeonhole only (no alerts, not counted in
+// the app's unread badge), or unmutes it.
+func (a *App) SetChatMuted(roomID string, muted bool) error {
+	return a.svc.SetMuted(a.ctx, roomID, muted)
+}
+
 // SetChatHidden hides a chat from the list (until a new message arrives) or
 // brings it back.
 func (a *App) SetChatHidden(roomID string, hidden bool) error {

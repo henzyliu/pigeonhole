@@ -36,7 +36,10 @@ CREATE TABLE IF NOT EXISTS rooms (
 	unread      INTEGER NOT NULL DEFAULT 0,
 	muted_until INTEGER NOT NULL DEFAULT 0,
 	-- hidden_ts is last_ts when the user hid the chat (0 = not hidden).
-	hidden_ts   INTEGER NOT NULL DEFAULT 0
+	hidden_ts   INTEGER NOT NULL DEFAULT 0,
+	-- local_muted is a mute set in Pigeonhole, kept apart from muted_until,
+	-- which bridges overwrite with the network's own mute state.
+	local_muted INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS members (
 	room_id    TEXT NOT NULL,
@@ -121,6 +124,9 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 	}
 	if err = addColumn(db, "rooms", "hidden_ts", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return nil, fmt.Errorf("failed to add hidden chats: %w", err)
+	}
+	if err = addColumn(db, "rooms", "local_muted", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return nil, fmt.Errorf("failed to add muted chats: %w", err)
 	}
 	if err = refreshEditedPreviews(db); err != nil {
 		return nil, fmt.Errorf("failed to fix chat previews: %w", err)
@@ -523,6 +529,23 @@ func (s *Store) SetHidden(ctx context.Context, roomID id.RoomID, hidden bool) er
 // newer than when it was hidden. A new message raises last_ts past
 // hidden_ts, which brings the chat back without any extra bookkeeping.
 const HiddenClause = "(hidden_ts > 0 AND last_ts <= hidden_ts)"
+
+// SetLocalMuted mutes a chat in Pigeonhole only, or unmutes it.
+func (s *Store) SetLocalMuted(ctx context.Context, roomID id.RoomID, muted bool) error {
+	_, err := s.DB.ExecContext(ctx, "UPDATE rooms SET local_muted=? WHERE room_id=?", muted, roomID)
+	if err == nil {
+		s.notify("rooms", roomID)
+	}
+	return err
+}
+
+// NetworkMutedClause is the SQL condition for a chat muted in the
+// network's own app (muted_until is in milliseconds).
+const NetworkMutedClause = "(muted_until > CAST(strftime('%s', 'now') AS INTEGER) * 1000)"
+
+// MutedClause is the SQL condition for a chat that's muted either way:
+// it doesn't alert or count toward the app's unread badge.
+const MutedClause = "(local_muted = 1 OR " + NetworkMutedClause + ")"
 
 func (s *Store) Mute(ctx context.Context, roomID id.RoomID, until time.Time) error {
 	ts := int64(0)

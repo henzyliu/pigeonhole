@@ -148,7 +148,8 @@ export default function App() {
             if (c.hidden) continue;
             const s = stats[(c.category as Category) || 'inbox'] ?? stats.inbox;
             s.total++;
-            if (c.unread > 0) s.unread++;
+            // Muted chats don't add to the tab counts, like the app badge.
+            if (c.unread > 0 && !c.muted && !c.mutedOnNetwork) s.unread++;
         }
         return stats;
     }, [chats]);
@@ -279,7 +280,8 @@ export default function App() {
                 </div>
                 {startError && <div className="banner error">{startError}</div>}
                 <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}
-                          onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}/>
+                          onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
+                          onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>
                 {!query.trim() && !showHidden && hiddenCount > 0 && (
                     <button className="requests-row hidden-row" onClick={() => {
                         setShowHidden(true);

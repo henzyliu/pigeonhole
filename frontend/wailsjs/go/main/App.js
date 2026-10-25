@@ -94,6 +94,10 @@ export function SetChatHidden(arg1, arg2) {
   return window['go']['main']['App']['SetChatHidden'](arg1, arg2);
 }
 
+export function SetChatMuted(arg1, arg2) {
+  return window['go']['main']['App']['SetChatMuted'](arg1, arg2);
+}
+
 export function SetHideMessageText(arg1) {
   return window['go']['main']['App']['SetHideMessageText'](arg1);
 }

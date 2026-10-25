@@ -49,6 +49,8 @@ export function SetAccountNotifications(arg1:string,arg2:string,arg3:boolean):Pr
 
 export function SetChatHidden(arg1:string,arg2:boolean):Promise<void>;
 
+export function SetChatMuted(arg1:string,arg2:boolean):Promise<void>;
+
 export function SetHideMessageText(arg1:boolean):Promise<void>;
 
 export function SetNotifications(arg1:boolean):Promise<void>;

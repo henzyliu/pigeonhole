@@ -53,6 +53,8 @@ export namespace inbox {
 	    lastStatus: string;
 	    seenBy: Reader[];
 	    historyLoading: boolean;
+	    muted: boolean;
+	    mutedOnNetwork: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -74,6 +76,8 @@ export namespace inbox {
 	        this.lastStatus = source["lastStatus"];
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
 	        this.historyLoading = source["historyLoading"];
+	        this.muted = source["muted"];
+	        this.mutedOnNetwork = source["mutedOnNetwork"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

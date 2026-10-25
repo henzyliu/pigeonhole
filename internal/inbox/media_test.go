@@ -304,3 +304,45 @@ func TestFetchedReelReplacesThumbnail(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Muting a chat in Pigeonhole stops its alerts and takes it out of the
+// app's unread badge, while it still shows its own unread count.
+func TestMutedChat(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	got := make(chan Notification, 4)
+	svc.OnNotify = func(n Notification) { got <- n }
+	roomID, send := newPortal(t, svc, "whatsapp")
+	if err := svc.SetMuted(ctx, string(roomID), true); err != nil {
+		t.Fatal(err)
+	}
+	send("you there?", time.Now())
+	select {
+	case n := <-got:
+		t.Fatalf("muted chat shouldn't alert: %+v", n)
+	case <-time.After(300 * time.Millisecond):
+	}
+	chats, err := svc.Chats(ctx)
+	if err != nil || len(chats) != 1 {
+		t.Fatalf("chats: %+v, %v", chats, err)
+	}
+	if c := chats[0]; !c.Muted || c.MutedOnNetwork || c.Unread != 1 {
+		t.Fatalf("expected a muted chat that's still unread: %+v", c)
+	}
+	if n, err := svc.UnreadChats(ctx); err != nil || n != 0 {
+		t.Fatalf("muted chats shouldn't count toward the badge: %d, %v", n, err)
+	}
+
+	if err = svc.SetMuted(ctx, string(roomID), false); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := svc.UnreadChats(ctx); n != 1 {
+		t.Fatalf("unmuted chat should count again, got %d", n)
+	}
+	send("hello?", time.Now())
+	select {
+	case <-got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("unmuted chat should alert")
+	}
+}
