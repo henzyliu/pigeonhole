@@ -58,10 +58,14 @@ jobs:
         with:
           node-version: 22
       - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
-      # Wails builds the Windows installer with NSIS, which the runner has
-      # installed but not on PATH.
+      # Wails builds the Windows installer with NSIS, which current Windows
+      # runners don't include.
       - if: runner.os == 'Windows'
-        run: echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+        run: |
+          if ! command -v makensis >/dev/null && [ ! -f "C:/Program Files (x86)/NSIS/makensis.exe" ]; then
+            choco install nsis -y --no-progress
+          fi
+          echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
       # The commit, tag (or branch) and date show under Settings → About.
       - run: >
           wails build -clean -platform ${{ matrix.platform }} ${{ runner.os == 'Windows' && '-nsis' || '' }}
@@ -73,7 +77,15 @@ jobs:
           mkdir -p dist dmg
           cp -R build/bin/Pigeonhole.app dmg/
           ln -s /Applications dmg/Applications
-          hdiutil create -volname "Pigeonhole $VERSION" -srcfolder dmg -ov -format UDZO "dist/Pigeonhole-$VERSION-mac.dmg"
+          # An explicit size: hdiutil's own estimate sometimes fails on CI
+          # with "No space left on device". One retry for its other flakes.
+          size=$(( $(du -sm dmg | cut -f1) + 40 ))m
+          for attempt in 1 2; do
+            hdiutil create -volname "Pigeonhole $VERSION" -srcfolder dmg -size "$size" -ov -format UDZO \
+              "dist/Pigeonhole-$VERSION-mac.dmg" && break
+            [ "$attempt" = 2 ] && exit 1
+            sleep 5
+          done
       # The installer, and the bare exe (zipped) for anyone who'd rather not
       # install.
       - if: runner.os == 'Windows'
