@@ -1,7 +1,7 @@
 # Pigeonhole
 
-A desktop app (macOS + Windows) that shows your Messenger, Instagram and WhatsApp
-chats (and, experimentally, Discord DMs) in one inbox, and lets you reply. Everything runs and is stored locally on your
+A desktop app (macOS + Windows) that shows your Messenger, Instagram, WhatsApp and
+Discord chats in one inbox, and lets you reply. Everything runs and is stored locally on your
 computer, so there's no server to host.
 
 The name: a pigeonhole is a mail-sorting slot, pigeons carry messages, and by
@@ -12,8 +12,9 @@ hole ends up holding more than one pigeon.
 
 ```
  Messenger ─┐                                   ┌─ React UI (Wails webview)
- Instagram ─┼─ mautrix connectors ───── localmx ┤
- WhatsApp  ─┘   (in-process, Go)        (SQLite)  └─ inbox service
+ Instagram ─┤                                   │
+ WhatsApp  ─┼─ mautrix connectors ───── localmx ┤
+ Discord   ─┘   (in-process, Go)      (SQLite)  └─ inbox service
 ```
 
 - **Connectors**: the network code from the [mautrix-meta](https://github.com/mautrix/meta)
@@ -36,8 +37,8 @@ hole ends up holding more than one pigeon.
   (wired in via a `replace` in `go.mod`). Currently: the thread backfill also pages
   through Messenger's end-to-end encrypted thread list (sync group 95), which
   upstream only fetches the first page of. See `pkg/connector/threadbackfill.go`.
-- **Discord (experimental)**: [mautrix-discord](https://github.com/mautrix/discord)'s
-  in-progress `bridgev2` rewrite (the `megadiscord` branch), pinned to one commit in
+- **Discord**: [mautrix-discord](https://github.com/mautrix/discord)'s
+  `bridgev2` rewrite (the `megadiscord` branch, not yet released upstream), pinned to one commit in
   `go.mod` along with the `beeper/discordgo` fork it needs. Its default config bridges
   DMs and group DMs only, no servers. Sign-in is the login window (which reads the
   token from discord.com) or a QR code scanned with the Discord app. Upgrading means

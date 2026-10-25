@@ -11,9 +11,6 @@ export const NETWORK_LABELS: Record<string, string> = {
     discord: 'Discord',
 };
 
-// Networks whose bridge is still in development upstream.
-export const EXPERIMENTAL_NETWORKS = new Set(['discord']);
-
 export function errorText(err: unknown): string {
     if (typeof err === 'string') return err;
     if (err instanceof Error) return err.message;

@@ -109,9 +109,9 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 	if err = s.addNetwork(dataDir, "whatsapp", "WhatsApp", wa); err != nil {
 		return nil, err
 	}
-	// Discord is experimental: it uses the bridge's in-progress bridgev2
-	// rewrite (pinned in go.mod). Its default config bridges DMs and group
-	// DMs only, no servers.
+	// Discord uses the bridge's bridgev2 rewrite, not yet released upstream
+	// (pinned in go.mod). Its default config bridges DMs and group DMs only,
+	// no servers.
 	dc := &discord.DiscordConnector{}
 	if err = loadConfig(discord.ExampleConfig, &dc.Config); err != nil {
 		return nil, err

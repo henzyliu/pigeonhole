@@ -1,5 +1,5 @@
 import {FormEvent, useEffect, useRef, useState} from 'react';
-import {BrowserOpenURL, errorText, EXPERIMENTAL_NETWORKS, Go, inbox, NETWORK_LABELS} from './api';
+import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS} from './api';
 import NetworkIcon from './NetworkIcon';
 
 type View =
@@ -149,7 +149,6 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                         {networks.map(n => (
                             <button key={n.id} className="network-button" disabled={busy} onClick={() => pickNetwork(n.id)}>
                                 <NetworkIcon network={n.id} size={28}/>{n.name}
-                                {EXPERIMENTAL_NETWORKS.has(n.id) && <span className="pill subtle">Experimental</span>}
                             </button>
                         ))}
                     </div>
@@ -157,8 +156,8 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                         Your messages stay on this computer. Connecting uses the same unofficial method as the
                         mautrix bridges, so Meta may occasionally ask you to verify the login. WhatsApp links
                         like WhatsApp Web, and unlinks if your phone is offline for about two weeks. Discord
-                        support is experimental: it covers direct and group messages (not servers), and Discord's
-                        rules don't allow unofficial clients, so use it at your own risk.
+                        covers direct and group messages (not servers); its rules don't allow unofficial
+                        clients, so use it at your own risk.
                     </p>
                 </>}
 
