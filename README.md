@@ -98,7 +98,7 @@ The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
 To share a version, push a tag for it:
 
 ```bash
-git tag v0.10.0 && git push origin v0.10.0
+git tag v0.10.1 && git push origin v0.10.1
 ```
 
 `.github/workflows/release.yml` then builds on GitHub's Mac and Windows
