@@ -6,6 +6,7 @@ import Accounts from './Accounts';
 import NewChat from './NewChat';
 import Settings from './Settings';
 import {applyTheme, Theme} from './theme';
+import {useUpdateStatus} from './updates';
 import NetworkIcon from './NetworkIcon';
 
 type Filter = 'all' | 'unread' | string;
@@ -32,6 +33,7 @@ export default function App() {
     const [showNewChat, setShowNewChat] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [theme, setTheme] = useState<Theme>('system');
+    const updateStatus = useUpdateStatus();
 
     // The saved setting wins over the early copy index.html applied.
     useEffect(() => {
@@ -89,11 +91,14 @@ export default function App() {
         const offError = EventsOn('inbox:error', (e: string) => setStartError(e));
         // Clicking a desktop notification opens that chat.
         const offOpen = EventsOn('inbox:open', (roomId: string) => showChat(roomId, chatsRef.current));
+        // Clicking the "update available" notification opens Settings.
+        const offUpdate = EventsOn('update:open', () => setShowSettings(true));
         return () => {
             offChange();
             offAccounts();
             offError();
             offOpen();
+            offUpdate();
         };
     }, [loadChats, loadAccounts, showChat]);
 
@@ -279,6 +284,11 @@ export default function App() {
                     ))}
                 </div>
                 {startError && <div className="banner error">{startError}</div>}
+                {updateStatus?.state === 'available' && (
+                    <button className="update-banner" onClick={() => setShowSettings(true)}>
+                        Pigeonhole {updateStatus.latest?.version} is available. <span>Update</span>
+                    </button>
+                )}
                 <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}
                           onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
                           onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>

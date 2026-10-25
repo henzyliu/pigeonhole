@@ -18,8 +18,20 @@ export function Chats() {
   return window['go']['main']['App']['Chats']();
 }
 
+export function CheckForUpdates() {
+  return window['go']['main']['App']['CheckForUpdates']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
+}
+
+export function GetUpdateStatus() {
+  return window['go']['main']['App']['GetUpdateStatus']();
+}
+
+export function InstallUpdate() {
+  return window['go']['main']['App']['InstallUpdate']();
 }
 
 export function LoginFlows(arg1) {
@@ -56,6 +68,10 @@ export function OpenMedia(arg1, arg2) {
 
 export function OpenNotificationSettings() {
   return window['go']['main']['App']['OpenNotificationSettings']();
+}
+
+export function OpenUpdatePage() {
+  return window['go']['main']['App']['OpenUpdatePage']();
 }
 
 export function PickAndSendFiles(arg1) {

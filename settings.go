@@ -30,6 +30,9 @@ type Settings struct {
 	// MutedAccounts lists accounts whose alerts are off, as AccountKey.
 	// Their chats still sync and count as unread.
 	MutedAccounts []string `json:"mutedAccounts,omitempty"`
+	// UpdateNotified is the newest version a notification was sent for, so
+	// each update is announced once.
+	UpdateNotified string `json:"updateNotified,omitempty"`
 	// BackgroundNoticeShown records that the "still running" notice has
 	// been shown, after the window was first closed.
 	BackgroundNoticeShown bool `json:"backgroundNoticeShown"`

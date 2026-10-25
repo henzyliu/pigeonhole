@@ -325,6 +325,7 @@ export namespace main {
 	    notificationsOff: boolean;
 	    hideMessageText: boolean;
 	    mutedAccounts?: string[];
+	    updateNotified?: string;
 	    backgroundNoticeShown: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -337,6 +338,7 @@ export namespace main {
 	        this.notificationsOff = source["notificationsOff"];
 	        this.hideMessageText = source["hideMessageText"];
 	        this.mutedAccounts = source["mutedAccounts"];
+	        this.updateNotified = source["updateNotified"];
 	        this.backgroundNoticeShown = source["backgroundNoticeShown"];
 	    }
 	}
@@ -356,6 +358,46 @@ export namespace main {
 	        this.system = source["system"];
 	    }
 	}
+	export class UpdateStatus {
+	    state: string;
+	    current: string;
+	    latest?: update.Release;
+	    progress: number;
+	    error: string;
+	    canInstall: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.current = source["current"];
+	        this.latest = this.convertValues(source["latest"], update.Release);
+	        this.progress = source["progress"];
+	        this.error = source["error"];
+	        this.canInstall = source["canInstall"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class VersionInfo {
 	    version: string;
 	    commit: string;
@@ -372,6 +414,33 @@ export namespace main {
 	        this.commit = source["commit"];
 	        this.branch = source["branch"];
 	        this.buildDate = source["buildDate"];
+	    }
+	}
+
+}
+
+export namespace update {
+	
+	export class Release {
+	    version: string;
+	    pageUrl: string;
+	    notes: string;
+	    asset: string;
+	    assetUrl: string;
+	    assetSize: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Release(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.pageUrl = source["pageUrl"];
+	        this.notes = source["notes"];
+	        this.asset = source["asset"];
+	        this.assetUrl = source["assetUrl"];
+	        this.assetSize = source["assetSize"];
 	    }
 	}
 

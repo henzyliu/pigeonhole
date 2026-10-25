@@ -98,7 +98,7 @@ The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
 To share a version, push a tag for it:
 
 ```bash
-git tag v0.9.2 && git push origin v0.9.2
+git tag v0.10.0 && git push origin v0.10.0
 ```
 
 `.github/workflows/release.yml` then builds on GitHub's Mac and Windows
@@ -119,6 +119,17 @@ one-time warnings: neither app is signed, so macOS asks you to allow it under
 Privacy & Security and Windows SmartScreen asks you to "Run anyway". Running
 the workflow by hand (Actions → Release → Run workflow) builds everything
 without releasing, as a check.
+
+Pigeonhole updates itself from these releases (`internal/update`, `updates.go`):
+it checks `releases/latest` 30 seconds after starting and every 6 hours, sends
+one notification per new version, and shows it in Settings → About and as a
+banner above the chat list. **Install update** downloads this system's file and
+installs it: on Windows it runs the installer silently, then starts the new
+version; on macOS it copies the app out of the disk image beside the running
+one, and a small script swaps them once Pigeonhole quits and reopens it. Files
+the app downloads itself aren't quarantined, so updates skip the first-launch
+prompt. A Mac copy in a folder it can't write to offers the download instead.
+Versions before 0.10.0 can't update themselves, so install 0.10.0 by hand once.
 
 To build the installer locally, install NSIS (`brew install makensis`) and run
 `wails build -platform windows/amd64 -nsis` with the MinGW variables above.

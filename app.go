@@ -40,6 +40,8 @@ type App struct {
 	// unreadTimer coalesces the bursts of changes during sync into one
 	// recount for the menu bar / tray.
 	unreadTimer *time.Timer
+
+	updates updater
 }
 
 func NewApp(svc *inbox.Service, dataDir string, settings Settings, background bool) *App {
@@ -57,6 +59,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.startBackground()
 	a.setupNotifications()
+	a.startUpdateChecks()
 	go cleanOpenedMedia()
 	go func() {
 		if err := a.svc.Start(context.Background()); err != nil {
@@ -83,6 +86,11 @@ func (a *App) setupNotifications() {
 	}
 	// Clicking a notification brings the window forward on that chat.
 	runtime.OnNotificationResponse(a.ctx, func(result runtime.NotificationResult) {
+		if isUpdate, _ := result.Response.UserInfo["update"].(bool); isUpdate {
+			a.showWindow()
+			runtime.EventsEmit(a.ctx, "update:open")
+			return
+		}
 		if roomID, ok := result.Response.UserInfo["roomId"].(string); ok {
 			a.showWindow()
 			runtime.EventsEmit(a.ctx, "inbox:open", roomID)

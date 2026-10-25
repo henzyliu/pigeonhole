@@ -11,7 +11,13 @@ export function CancelLogin(arg1:string):Promise<void>;
 
 export function Chats():Promise<Array<inbox.Chat>>;
 
+export function CheckForUpdates():Promise<main.UpdateStatus>;
+
 export function GetSettings():Promise<main.Settings>;
+
+export function GetUpdateStatus():Promise<main.UpdateStatus>;
+
+export function InstallUpdate():Promise<void>;
 
 export function LoginFlows(arg1:string):Promise<Array<inbox.LoginFlow>>;
 
@@ -30,6 +36,8 @@ export function OpenChat(arg1:string,arg2:string,arg3:string):Promise<string>;
 export function OpenMedia(arg1:string,arg2:string):Promise<void>;
 
 export function OpenNotificationSettings():Promise<void>;
+
+export function OpenUpdatePage():Promise<void>;
 
 export function PickAndSendFiles(arg1:string):Promise<void>;
 

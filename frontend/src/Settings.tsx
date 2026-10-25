@@ -3,6 +3,7 @@ import {errorText, Go, inbox} from './api';
 import NetworkIcon from './NetworkIcon';
 import {main} from '../wailsjs/go/models';
 import {applyTheme, Theme} from './theme';
+import {UpdateRow, useUpdateStatus} from './updates';
 
 const THEMES: {id: Theme; label: string}[] = [
     {id: 'system', label: 'System'},
@@ -17,6 +18,7 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
     const [permission, setPermission] = useState<main.NotificationPermission | null>(null);
     const [startAtLogin, setStartAtLogin] = useState<main.StartAtLogin | null>(null);
     const [accounts, setAccounts] = useState<inbox.Account[]>([]);
+    const updateStatus = useUpdateStatus();
 
     useEffect(() => {
         Go.Version().then(setVersion).catch(console.error);
@@ -159,6 +161,7 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                         <div className="about-version">Pigeonhole {version.version}</div>
                     </div>
                 )}
+                <UpdateRow status={updateStatus}/>
             </div>
         </div>
     );
