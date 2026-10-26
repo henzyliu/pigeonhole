@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -369,5 +370,20 @@ func TestDraft(t *testing.T) {
 	}
 	if chats, _ = svc.Chats(ctx); chats[0].Draft != "" || chats[0].DraftReply != "" {
 		t.Fatalf("draft should be cleared: %+v", chats[0])
+	}
+}
+
+// Link previews the network sent come through with the message; ones with
+// nothing to show, or that aren't web links, are left out.
+func TestLinkPreviews(t *testing.T) {
+	m := &Message{}
+	fillContent(m, "m.room.message", `{"msgtype":"m.text","body":"look https://www.example.com/a","com.beeper.linkpreviews":[
+		{"matched_url":"https://www.example.com/a","og:title":" A page ","og:description":"About it","og:image":"mxc://local/pic","og:image:width":1200,"og:image:height":630},
+		{"matched_url":"https://example.org/empty"},
+		{"matched_url":"javascript:alert(1)","og:title":"Nope"}]}`)
+	want := []LinkPreview{{URL: "https://www.example.com/a", Site: "example.com", Title: "A page", Description: "About it",
+		Image: "/media/pic", Width: 1200, Height: 630}}
+	if !slices.Equal(m.Previews, want) {
+		t.Fatalf("previews: %+v", m.Previews)
 	}
 }

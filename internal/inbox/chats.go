@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -85,8 +86,22 @@ type Message struct {
 	// stored as just a thumbnail and link: "reel", "story" or "post". The
 	// bridge can fetch the real media on request (see ResolveMedia).
 	Fetchable string `json:"fetchable"`
+	// Previews are the link previews the network sent with the message.
+	Previews []LinkPreview `json:"previews"`
 
 	senderID id.UserID
+}
+
+// LinkPreview is a link's title, description and picture, as sent by the
+// network (Pigeonhole never fetches pages itself).
+type LinkPreview struct {
+	URL         string `json:"url"`
+	Site        string `json:"site"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Image       string `json:"image"`
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
 }
 
 type Reader struct {
@@ -369,10 +384,49 @@ func fillContent(m *Message, evtType, raw string) {
 			m.Thumbnail = MediaURL(string(thumb))
 		}
 	}
+	if m.Kind == "text" || m.Kind == "notice" {
+		m.Previews = linkPreviews(msg.BeeperLinkPreviews)
+	}
 	if _, unresolved := content.Raw[unresolvedMediaKey]; unresolved {
 		link, _ := content.Raw["external_url"].(string)
 		m.Fetchable = fetchableKind(link)
 	}
+}
+
+// linkPreviews keeps the previews worth showing: ones with a link and a
+// title or picture.
+func linkPreviews(in []*event.BeeperLinkPreview) []LinkPreview {
+	var out []LinkPreview
+	for _, p := range in {
+		if p == nil {
+			continue
+		}
+		link := p.MatchedURL
+		if link == "" {
+			link = p.CanonicalURL
+		}
+		u, err := url.Parse(link)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			continue
+		}
+		image := p.ImageURL
+		if p.ImageEncryption != nil {
+			image = p.ImageEncryption.URL
+		}
+		lp := LinkPreview{
+			URL: link, Site: p.SiteName, Title: strings.TrimSpace(p.Title),
+			Description: strings.TrimSpace(p.Description), Image: MediaURL(string(image)),
+			Width: int(p.ImageWidth), Height: int(p.ImageHeight),
+		}
+		if lp.Site == "" {
+			lp.Site = strings.TrimPrefix(u.Hostname(), "www.")
+		}
+		if lp.Title == "" && lp.Image == "" {
+			continue
+		}
+		out = append(out, lp)
+	}
+	return out
 }
 
 // unresolvedMediaKey marks a message whose media the bridge can still fetch.

@@ -285,6 +285,21 @@ button.thread-hide:hover { color: var(--fg); }
 .bubble.image .caption, .bubble.video .caption { padding: 6px 2px 0; color: var(--fg); }
 .bubble.notice { background: transparent; color: var(--fg-muted); font-style: italic; }
 .bubble.redacted { background: transparent !important; color: var(--fg-muted) !important; border: 1px dashed var(--border); }
+/* A link's preview card, under the message it came with. */
+.link-preview {
+    display: block; width: 300px; max-width: 100%; margin-top: 4px; overflow: hidden;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg);
+    color: var(--fg); text-decoration: none;
+}
+.link-preview:hover { background: var(--bg-hover); }
+.link-preview img { display: block; width: 100%; max-height: 200px; object-fit: cover; background: var(--bg-hover); }
+.link-preview-text { padding: 8px 12px 10px; display: grid; gap: 2px; }
+.link-preview-site { font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-preview-title, .link-preview-desc {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+}
+.link-preview-title { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.link-preview-desc { font-size: 13px; color: var(--fg-muted); line-height: 1.35; }
 .media { display: block; max-width: 100%; max-height: 360px; border-radius: 14px; }
 .media.zoomable { cursor: zoom-in; }
 /* Corner button to watch a chat video full-window; shows on hover. */

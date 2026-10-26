@@ -102,6 +102,30 @@ export namespace inbox {
 		    return a;
 		}
 	}
+	export class LinkPreview {
+	    url: string;
+	    site: string;
+	    title: string;
+	    description: string;
+	    image: string;
+	    width: number;
+	    height: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LinkPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.site = source["site"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.image = source["image"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	    }
+	}
 	export class LoginField {
 	    id: string;
 	    name: string;
@@ -233,6 +257,7 @@ export namespace inbox {
 	    reactions: Reaction[];
 	    seenBy: Reader[];
 	    fetchable: string;
+	    previews: LinkPreview[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -260,6 +285,7 @@ export namespace inbox {
 	        this.reactions = this.convertValues(source["reactions"], Reaction);
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
 	        this.fetchable = source["fetchable"];
+	        this.previews = this.convertValues(source["previews"], LinkPreview);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

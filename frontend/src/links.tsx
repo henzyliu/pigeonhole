@@ -66,11 +66,15 @@ export function displayURL(label: string): string {
 
 // Links open in the default browser. A plain target="_blank" link does
 // nothing in the Mac webview and opens a bare Edge window on Windows.
+export function openLink(url: string) {
+    BrowserOpenURL(url);
+}
+
 export function linkify(text: string) {
     return splitLinks(text).map((seg, i) => seg.url
         ? <a key={i} href={seg.url} title={seg.url} onClick={e => {
             e.preventDefault();
-            BrowserOpenURL(seg.url!);
+            openLink(seg.url!);
         }}>{seg.text}</a>
         : seg.text);
 }

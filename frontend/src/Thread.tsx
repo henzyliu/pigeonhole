@@ -1,7 +1,7 @@
 import {CSSProperties, Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
-import {linkify} from './links';
+import {linkify, openLink} from './links';
 import MediaViewer from './MediaViewer';
 import NetworkIcon from './NetworkIcon';
 
@@ -327,6 +327,7 @@ function MessageRow(props: {
                         </div>
                     )}
                 </div>
+                {!msg.redacted && msg.previews?.map((p, i) => <LinkPreviewCard key={i} preview={p}/>)}
                 {msg.reactions?.length > 0 && (
                     <div className="reactions">
                         {msg.reactions.map(r => (
@@ -337,6 +338,27 @@ function MessageRow(props: {
                 <MessageStatus msg={msg} isDm={!props.showSender} isLatestMine={props.isLatestMine}/>
             </div>
         </div>
+    );
+}
+
+// A link's title, description and picture, as the network sent them;
+// clicking it opens the link in the browser.
+function LinkPreviewCard({preview: p}: {preview: inbox.LinkPreview}) {
+    // The picture's box is sized from the stored dimensions so the thread
+    // doesn't jump when it loads; very tall pictures are cropped.
+    const ratio = p.width > 0 && p.height > 0 ? Math.max(p.width / p.height, 1.2) : 1.91;
+    return (
+        <a className="link-preview" href={p.url} title={p.url} onClick={e => {
+            e.preventDefault();
+            openLink(p.url);
+        }}>
+            {p.image && <img src={p.image} alt="" loading="lazy" style={{aspectRatio: String(ratio)}}/>}
+            <div className="link-preview-text">
+                <div className="link-preview-site">{p.site}</div>
+                {p.title && <div className="link-preview-title">{p.title}</div>}
+                {p.description && p.description !== p.title && <div className="link-preview-desc">{p.description}</div>}
+            </div>
+        </a>
     );
 }
 
