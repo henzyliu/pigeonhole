@@ -2,6 +2,8 @@ package update
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -31,10 +33,14 @@ func TestNewer(t *testing.T) {
 	}
 }
 
-// Latest reads the release and picks this system's file; Download fetches
-// it with progress and rejects a short download.
+// Latest reads the release and picks this system's file and the checksums;
+// Download fetches the file with progress, and only keeps it if it's whole
+// and matches its published checksum.
 func TestLatestAndDownload(t *testing.T) {
 	payload := []byte("pretend installer contents")
+	sum := sha256.Sum256(payload)
+	good := hex.EncodeToString(sum[:])
+	sums := good + "  Pigeonhole-0.10.0-mac.dmg\n" + good + "  Pigeonhole-0.10.0-windows-setup.exe\n"
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -42,12 +48,17 @@ func TestLatestAndDownload(t *testing.T) {
 			fmt.Fprintf(w, `{"tag_name":"v0.10.0","html_url":"%[1]s/page","body":"notes","assets":[
 				{"name":"Pigeonhole-0.10.0-mac.dmg","browser_download_url":"%[1]s/file","size":%[2]d},
 				{"name":"Pigeonhole-0.10.0-windows-portable.zip","browser_download_url":"%[1]s/zip","size":1},
-				{"name":"Pigeonhole-0.10.0-windows-setup.exe","browser_download_url":"%[1]s/file","size":%[2]d}]}`,
+				{"name":"Pigeonhole-0.10.0-windows-setup.exe","browser_download_url":"%[1]s/file","size":%[2]d},
+				{"name":"SHA256SUMS.txt","browser_download_url":"%[1]s/sums","size":1}]}`,
 				srv.URL, len(payload))
 		case "/file":
 			_, _ = w.Write(payload)
+		case "/tampered":
+			_, _ = w.Write([]byte("pretend installer CONTENTS")) // same size, different bytes
 		case "/short":
 			_, _ = w.Write(payload[:5])
+		case "/sums":
+			_, _ = w.Write([]byte(sums))
 		}
 	}))
 	defer srv.Close()
@@ -57,7 +68,7 @@ func TestLatestAndDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Version != "0.10.0" || r.PageURL != srv.URL+"/page" || r.Notes != "notes" {
+	if r.Version != "0.10.0" || r.PageURL != srv.URL+"/page" || r.Notes != "notes" || r.ChecksumsURL != srv.URL+"/sums" {
 		t.Fatalf("unexpected release: %+v", r)
 	}
 	if suffix := assetSuffix(runtime.GOOS); suffix != "" {
@@ -76,8 +87,20 @@ func TestLatestAndDownload(t *testing.T) {
 		t.Fatalf("download: %q, progress %d", data, lastDone)
 	}
 
-	r.AssetURL = srv.URL + "/short"
-	if _, err = Download(context.Background(), r, t.TempDir(), nil); err == nil {
-		t.Fatal("a short download should fail")
+	for name, change := range map[string]func(r *Release){
+		"tampered":     func(r *Release) { r.AssetURL = srv.URL + "/tampered" },
+		"short":        func(r *Release) { r.AssetURL = srv.URL + "/short" },
+		"no checksums": func(r *Release) { r.ChecksumsURL = "" },
+		"not listed":   func(r *Release) { r.Asset = "Pigeonhole-0.10.0-other.dmg" },
+	} {
+		bad := *r
+		change(&bad)
+		dir := t.TempDir()
+		if _, err = Download(context.Background(), &bad, dir, nil); err == nil {
+			t.Errorf("%s: expected the download to be refused", name)
+		}
+		if left, _ := os.ReadDir(dir); len(left) != 0 {
+			t.Errorf("%s: a refused download should be deleted, found %v", name, left)
+		}
 	}
 }

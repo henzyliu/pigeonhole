@@ -43,6 +43,22 @@ Your messages stay on your computer. Connecting uses the same unofficial method
 as the mautrix bridges, which the networks don't officially allow, so there's a
 small risk of an account being asked to verify a login or being flagged.
 
+## About this project
+
+Pigeonhole is a personal project, shared as-is in case it's useful to others.
+It comes with no warranty and no promise of support or updates, though bug
+reports are welcome in [Issues](https://github.com/henzyliu/pigeonhole/issues).
+
+**Only download Pigeonhole from this repository's
+[Releases](https://github.com/henzyliu/pigeonhole/releases) page.** The licence
+lets anyone publish their own copies, and a copy from somewhere else could
+have been changed to steal the logins it holds. Each release lists SHA-256
+checksums of its files in `SHA256SUMS.txt`, and Pigeonhole's built-in updater
+refuses any download that doesn't match them.
+
+Found a security problem? Please report it privately; see
+[SECURITY.md](SECURITY.md).
+
 ## How it works
 
 ```
@@ -133,7 +149,7 @@ The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
 To share a version, push a tag for it:
 
 ```bash
-git tag v0.10.2 && git push origin v0.10.2
+git tag v0.10.3 && git push origin v0.10.3
 ```
 
 `.github/workflows/release.yml` then builds on GitHub's Mac and Windows
@@ -145,7 +161,10 @@ with:
 - `Pigeonhole-<version>-windows-setup.exe`: an installer that installs for the
   current user (no admin prompt), closes a running Pigeonhole first, and adds
   Start menu and desktop shortcuts;
-- `Pigeonhole-<version>-windows-portable.zip`: the bare exe.
+- `Pigeonhole-<version>-windows-portable.zip`: the bare exe;
+- `SHA256SUMS.txt`: SHA-256 checksums of the files above.
+
+Every download also includes `LICENSE.txt`.
 
 The tag has to match `info.productVersion` in `wails.json`, or the workflow
 stops before building. The release notes list the commits since the previous
@@ -158,8 +177,9 @@ without releasing, as a check.
 Pigeonhole updates itself from these releases (`internal/update`, `updates.go`):
 it checks `releases/latest` 30 seconds after starting and every 6 hours, sends
 one notification per new version, and shows it in Settings → About and as a
-banner above the chat list. **Install update** downloads this system's file and
-installs it: on Windows it runs the installer silently, then starts the new
+banner above the chat list. **Install update** downloads this system's file, checks it against the
+release's `SHA256SUMS.txt` (refusing it if the checksums are missing or don't
+match), and installs it: on Windows it runs the installer silently, then starts the new
 version; on macOS it copies the app out of the disk image beside the running
 one, and a small script swaps them once Pigeonhole quits and reopens it. Files
 the app downloads itself aren't quarantined, so updates skip the first-launch

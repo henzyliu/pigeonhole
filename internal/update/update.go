@@ -4,7 +4,10 @@
 package update
 
 import (
+	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +36,13 @@ type Release struct {
 	Asset     string `json:"asset"`
 	AssetURL  string `json:"assetUrl"`
 	AssetSize int64  `json:"assetSize"`
+	// ChecksumsURL is the release's SHA256SUMS.txt, which every download
+	// is checked against before it's installed.
+	ChecksumsURL string `json:"checksumsUrl"`
 }
+
+// ChecksumsFile is the name release.yml gives the release's checksums.
+const ChecksumsFile = "SHA256SUMS.txt"
 
 // assetSuffix is the end of the release file meant for this system; see
 // the file names in release.yml.
@@ -79,6 +88,11 @@ func Latest(ctx context.Context) (*Release, error) {
 		return nil, fmt.Errorf("couldn't read the release: %w", err)
 	}
 	r := &Release{Version: strings.TrimPrefix(body.TagName, "v"), PageURL: body.HTMLURL, Notes: body.Body}
+	for _, a := range body.Assets {
+		if a.Name == ChecksumsFile {
+			r.ChecksumsURL = a.URL
+		}
+	}
 	if suffix := assetSuffix(runtime.GOOS); suffix != "" {
 		for _, a := range body.Assets {
 			if strings.HasSuffix(a.Name, suffix) {
@@ -123,10 +137,15 @@ func parse(v string) ([3]int, bool) {
 }
 
 // Download saves the release's file for this system in dir, reporting
-// progress as it goes, and checks it arrived whole.
+// progress as it goes, and checks it against the release's published
+// SHA-256 checksum, so a damaged or tampered download is never installed.
 func Download(ctx context.Context, r *Release, dir string, progress func(done, total int64)) (string, error) {
 	if r.AssetURL == "" {
 		return "", errors.New("this release has no download for this computer")
+	}
+	want, err := expectedChecksum(ctx, r)
+	if err != nil {
+		return "", err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
@@ -154,7 +173,8 @@ func Download(ctx context.Context, r *Release, dir string, progress func(done, t
 	if total <= 0 {
 		total = resp.ContentLength
 	}
-	w := &progressWriter{w: f, total: total, report: progress}
+	hash := sha256.New()
+	w := &progressWriter{w: io.MultiWriter(f, hash), total: total, report: progress}
 	_, err = io.Copy(w, resp.Body)
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
@@ -162,11 +182,44 @@ func Download(ctx context.Context, r *Release, dir string, progress func(done, t
 	if err == nil && r.AssetSize > 0 && w.done != r.AssetSize {
 		err = fmt.Errorf("download was incomplete (%d of %d bytes)", w.done, r.AssetSize)
 	}
+	if got := hex.EncodeToString(hash.Sum(nil)); err == nil && got != want {
+		err = fmt.Errorf("the download doesn't match the release's checksum, so it wasn't installed")
+	}
 	if err != nil {
 		_ = os.Remove(path)
 		return "", err
 	}
 	return path, nil
+}
+
+// expectedChecksum reads the asset's SHA-256 from the release's
+// SHA256SUMS.txt ("<hex>  <file name>" lines, as sha256sum writes them).
+// A release without one isn't installed.
+func expectedChecksum(ctx context.Context, r *Release) (string, error) {
+	if r.ChecksumsURL == "" {
+		return "", errors.New("this release has no checksums, so it can't be installed safely")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.ChecksumsURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Pigeonhole-updater")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("couldn't get the release's checksums: %s", resp.Status)
+	}
+	scanner := bufio.NewScanner(io.LimitReader(resp.Body, 64<<10))
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == r.Asset && len(fields[0]) == sha256.Size*2 {
+			return strings.ToLower(fields[0]), nil
+		}
+	}
+	return "", fmt.Errorf("the release's checksums don't list %s", r.Asset)
 }
 
 type progressWriter struct {

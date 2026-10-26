@@ -428,6 +428,7 @@ export namespace update {
 	    asset: string;
 	    assetUrl: string;
 	    assetSize: number;
+	    checksumsUrl: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Release(source);
@@ -441,6 +442,7 @@ export namespace update {
 	        this.asset = source["asset"];
 	        this.assetUrl = source["assetUrl"];
 	        this.assetSize = source["assetSize"];
+	        this.checksumsUrl = source["checksumsUrl"];
 	    }
 	}
 

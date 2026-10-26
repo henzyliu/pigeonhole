@@ -117,6 +117,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # Fingerprints of every file. The updater checks downloads against
+      # these and won't install one that doesn't match.
+      - run: cd dist && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
       # Release notes: the commits since the previous tag, then how to get
       # past the first-launch warnings (the apps aren't signed).
       - run: |
