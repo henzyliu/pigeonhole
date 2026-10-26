@@ -143,11 +143,22 @@ func (s *Service) MediaHandler() http.Handler {
 			return
 		}
 		if mime != "" {
-			w.Header().Set("Content-Type", mime)
+			w.Header().Set("Content-Type", playableMime(mime))
 		}
 		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 		http.ServeFile(w, r, path)
 	})
+}
+
+// playableMime fixes media types the webview won't play as labelled:
+// voice notes from Messenger's encrypted chats come as "audio/opus", which
+// WebKit refuses, though it plays the same Ogg file as audio/ogg.
+func playableMime(mime string) string {
+	switch strings.ToLower(strings.TrimSpace(mime)) {
+	case "audio/opus", "audio/x-opus", "audio/ogg; codecs=opus":
+		return "audio/ogg; codecs=opus"
+	}
+	return mime
 }
 
 func (s *Service) profiles(ctx context.Context) (map[id.UserID]profile, error) {

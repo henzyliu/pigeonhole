@@ -359,9 +359,10 @@ func (mc *MessageConverter) convertWhatsAppAudio(ctx context.Context, audio *waC
 	isVoiceMessage := true // audio.GetPTT()
 	metadata, converted, caption, err := convertWhatsAppAttachment[*waMediaTransport.AudioTransport](ctx, mc, audio, whatsmeow.MediaAudio, func(ctx context.Context, data []byte, mimeType string) ([]byte, string, string, error) {
 		fileName := "audio" + exmime.ExtensionFromMimetype(mimeType)
-		// Pigeonhole: without ffmpeg, keep the original (usually MP4/AAC, which
-		// the app plays) instead of failing the whole message.
-		if isVoiceMessage && !strings.HasPrefix(mimeType, "audio/ogg") && ffmpeg.Supported() {
+		// Pigeonhole: voice notes are usually Ogg/Opus already, labelled
+		// audio/opus. Without ffmpeg, keep the original (which the app plays)
+		// instead of failing the whole message.
+		if isVoiceMessage && !strings.HasPrefix(mimeType, "audio/ogg") && mimeType != "audio/opus" && ffmpeg.Supported() {
 			data, err = ffmpeg.ConvertBytes(ctx, data, ".ogg", []string{}, []string{"-c:a", "libopus"}, mimeType)
 			if err != nil {
 				return data, mimeType, fileName, fmt.Errorf("%w audio to ogg/opus: %w", bridgev2.ErrMediaConvertFailed, err)

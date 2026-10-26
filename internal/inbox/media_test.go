@@ -442,3 +442,18 @@ func TestEditRefused(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// Voice notes labelled audio/opus are served as Ogg, which the webview
+// plays; other types are left alone.
+func TestPlayableMime(t *testing.T) {
+	for in, want := range map[string]string{
+		"audio/opus":             "audio/ogg; codecs=opus",
+		"audio/ogg; codecs=opus": "audio/ogg; codecs=opus",
+		"audio/mp4":              "audio/mp4",
+		"image/jpeg":             "image/jpeg",
+	} {
+		if got := playableMime(in); got != want {
+			t.Errorf("playableMime(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
