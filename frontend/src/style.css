@@ -597,6 +597,14 @@ button.switch.on .switch-knob { transform: translateX(16px); }
     display: block; width: calc(100% - 32px); margin: 0 16px 10px; padding: 7px 12px; text-align: left;
     border: none; border-radius: 10px; background: var(--bg-hover); color: var(--fg); font-size: 13px;
 }
+.signed-out-banner { background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.update-banner.signed-out-banner span { color: var(--danger); }
+.signed-out-bar {
+    display: flex; align-items: center; gap: 12px; margin: 0 16px 8px; padding: 8px 8px 8px 14px; font-size: 13px;
+    border-radius: 10px; background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.signed-out-bar span { flex: 1; }
+.signed-out-bar button { flex-shrink: 0; }
 .update-banner span { color: var(--accent); font-weight: 600; margin-left: 4px; }
 .setting.about { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px; user-select: text; }
 .about-version { font-weight: 600; flex-shrink: 0; }

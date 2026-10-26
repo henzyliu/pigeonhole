@@ -87,6 +87,11 @@ func (a *App) setupNotifications() {
 	}
 	// Clicking a notification brings the window forward on that chat.
 	runtime.OnNotificationResponse(a.ctx, func(result runtime.NotificationResult) {
+		if network, ok := result.Response.UserInfo["signIn"].(string); ok {
+			a.showWindow()
+			runtime.EventsEmit(a.ctx, "accounts:signin", network)
+			return
+		}
 		if isUpdate, _ := result.Response.UserInfo["update"].(bool); isUpdate {
 			a.showWindow()
 			runtime.EventsEmit(a.ctx, "update:open")
@@ -97,6 +102,22 @@ func (a *App) setupNotifications() {
 			runtime.EventsEmit(a.ctx, "inbox:open", roomID)
 		}
 	})
+	// Being signed out is worth an alert even when that account's message
+	// alerts are off, since nothing more arrives from it until you sign in.
+	a.svc.OnSignedOut = func(network, networkName, accountName string) {
+		if a.GetSettings().NotificationsOff {
+			return
+		}
+		err := runtime.SendNotification(a.ctx, runtime.NotificationOptions{
+			ID:    "pigeonhole-signed-out-" + network,
+			Title: networkName + " signed you out",
+			Body:  "Open Pigeonhole to sign in to " + accountName + " again. Until then, no new messages arrive from it.",
+			Data:  map[string]any{"signIn": network},
+		})
+		if err != nil {
+			a.svc.Log.Warn().Err(err).Str("network", network).Msg("Failed to send signed-out notification")
+		}
+	}
 	a.svc.OnNotify = func(n inbox.Notification) {
 		settings := a.GetSettings()
 		if settings.NotificationsOff {

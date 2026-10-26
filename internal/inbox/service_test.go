@@ -13,6 +13,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"maunium.net/go/mautrix/bridgev2/status"
 	"unified-inbox/internal/localmx"
 )
 
@@ -418,5 +419,32 @@ func TestNeedsEmbeddedBrowser(t *testing.T) {
 		if got := needsEmbeddedBrowser(&bridgev2.LoginCookiesParams{Fields: c.fields}); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// Being signed out by the network alerts once, not on every repeat of the
+// state, and again only after signing back in; logging out yourself and
+// connection blips don't alert at all.
+func TestSignedOutAlert(t *testing.T) {
+	svc := newTestService(t)
+	var alerts []string
+	svc.OnSignedOut = func(network, networkName, accountName string) {
+		alerts = append(alerts, networkName+"/"+accountName)
+	}
+	state := func(evt status.BridgeStateEvent) {
+		svc.onBridgeState("instagram", status.BridgeState{StateEvent: evt, RemoteID: "42", RemoteName: "henry"})
+	}
+	state(status.StateConnected)
+	state(status.StateTransientDisconnect)
+	state(status.StateBadCredentials)
+	state(status.StateBadCredentials)
+	if len(alerts) != 1 || alerts[0] != "Instagram/henry" {
+		t.Fatalf("alerts after being signed out: %v", alerts)
+	}
+	state(status.StateConnected)
+	state(status.StateBadCredentials)
+	state(status.StateLoggedOut)
+	if len(alerts) != 2 {
+		t.Fatalf("alerts after signing in and being signed out again: %v", alerts)
 	}
 }

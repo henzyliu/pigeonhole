@@ -27,7 +27,7 @@ const FLOW_ORDER = [
 
 const META_NETWORKS = new Set(['messenger', 'instagram']);
 
-export default function Accounts(props: {accounts: inbox.Account[]; onClose: () => void}) {
+export default function Accounts(props: {accounts: inbox.Account[]; signIn?: string; onClose: () => void}) {
     const [view, setView] = useState<View>({kind: 'list'});
     const [networks, setNetworks] = useState<inbox.LoginFlow[]>([]);
     const [busy, setBusy] = useState(false);
@@ -84,6 +84,16 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
     const submit = (step: inbox.LoginStep, values: Record<string, string>) =>
         run(async () => showStep(await Go.SubmitLogin(step.sessionId, values)));
 
+    // Opened to sign in to a network again: start right away. (The same
+    // account signing in again takes over its old chats.)
+    const signInStarted = useRef(false);
+    useEffect(() => {
+        if (props.signIn && !signInStarted.current) {
+            signInStarted.current = true;
+            pickNetwork(props.signIn);
+        }
+    });
+
     // Display-and-wait steps (e.g. "approve on your phone") advance on their own.
     useEffect(() => {
         if (view.kind === 'step' && view.step.type === 'display_and_wait') {
@@ -130,6 +140,9 @@ export default function Accounts(props: {accounts: inbox.Account[]; onClose: () 
                                                     )}
                                                 </>}
                                         </div>
+                                        {a.needsLogin && confirmingLogout !== key && (
+                                            <button className="link" disabled={busy} onClick={() => pickNetwork(a.network)}>Sign in again</button>
+                                        )}
                                         {confirmingLogout === key ? <>
                                             <button className="link" disabled={busy} onClick={() => setConfirmingLogout('')}>Cancel</button>
                                             <button className="link danger" disabled={busy} onClick={() => run(async () => {
@@ -233,7 +246,7 @@ function stateLabel(a: inbox.Account): string {
         case 'transient_disconnect':
             return 'Reconnecting…';
         case 'bad_credentials':
-            return 'Signed out — please log in again';
+            return `Signed out by ${a.networkName}`;
         default:
             return a.error || a.state;
     }

@@ -65,6 +65,9 @@ type Account struct {
 	Name        string `json:"name"`
 	State       string `json:"state"`
 	Error       string `json:"error"`
+	// NeedsLogin is set when the network has signed this account out, so
+	// it has to be signed in again.
+	NeedsLogin bool `json:"needsLogin"`
 	// HistoryPending counts this account's chats whose older messages are
 	// still loading.
 	HistoryPending int `json:"historyPending"`
@@ -394,6 +397,7 @@ func (s *Service) Accounts() ([]Account, error) {
 			s.lock.Unlock()
 			if ok {
 				acc.State = strings.ToLower(string(state.StateEvent))
+				acc.NeedsLogin = needsLogin(state)
 				if state.StateEvent != status.StateConnected {
 					acc.Error = state.Message
 					if acc.Error == "" {

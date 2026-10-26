@@ -58,6 +58,9 @@ type Service struct {
 	Emit func(name string, data any)
 	// OnNotify is called when a new message should raise a desktop alert.
 	OnNotify func(Notification)
+	// OnSignedOut is called when the network signs an account out (e.g. an
+	// expired session), so it needs signing in again.
+	OnSignedOut func(network, networkName, accountName string)
 
 	ctx      context.Context
 	networks map[string]*Network
@@ -361,10 +364,26 @@ func (s *Service) onBridgeState(network string, state status.BridgeState) {
 	if state.RemoteID == "" {
 		return
 	}
+	key := network + "/" + string(state.RemoteID)
 	s.lock.Lock()
-	s.states[network+"/"+string(state.RemoteID)] = state
+	prev, hadPrev := s.states[key]
+	s.states[key] = state
 	s.lock.Unlock()
+	if needsLogin(state) && (!hadPrev || !needsLogin(prev)) && s.OnSignedOut != nil {
+		name := state.RemoteName
+		if name == "" {
+			name = string(state.RemoteID)
+		}
+		s.OnSignedOut(network, s.networks[network].Name, name)
+	}
 	s.emit("inbox:accounts", nil)
+}
+
+// needsLogin reports whether an account's state means the network signed
+// it out, rather than a connection problem that sorts itself out. (Logging
+// out yourself is StateLoggedOut, and removes the account.)
+func needsLogin(state status.BridgeState) bool {
+	return state.StateEvent == status.StateBadCredentials
 }
 
 // network returns a started network; see Network.started.

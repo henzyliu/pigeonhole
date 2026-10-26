@@ -13,6 +13,8 @@ export default function Thread(props: {
     chat: inbox.Chat;
     tick: number;
     typing: string[];
+    signedOut: boolean;
+    onSignIn: () => void;
     onSetHidden: (hidden: boolean) => Promise<void>;
 }) {
     const {chat} = props;
@@ -303,6 +305,12 @@ export default function Thread(props: {
                 )}
             </div>
             {error && <div className="banner error">{error}</div>}
+            {props.signedOut && (
+                <div className="signed-out-bar">
+                    <span>{NETWORK_LABELS[chat.network] ?? chat.network} signed you out, so new messages won't arrive here.</span>
+                    <button className="primary" onClick={props.onSignIn}>Sign in again</button>
+                </div>
+            )}
             {editing && (
                 <div className="reply-bar">
                     <div>

@@ -22,6 +22,13 @@ const CATEGORIES: {id: Category; label: string; alwaysShown?: boolean}[] = [
 
 
 const NO_ONE: string[] = [];
+
+// signedOutOf reports whether every account on a network has been signed
+// out by it, so nothing new arrives in its chats.
+function signedOutOf(accounts: inbox.Account[], network: string): boolean {
+    const on = accounts.filter(a => a.network === network);
+    return on.length > 0 && on.every(a => a.needsLogin);
+}
 export default function App() {
     const [chats, setChats] = useState<inbox.Chat[]>([]);
     const [accounts, setAccounts] = useState<inbox.Account[]>([]);
@@ -32,6 +39,12 @@ export default function App() {
     const [showHidden, setShowHidden] = useState(false);
     const [query, setQuery] = useState('');
     const [showAccounts, setShowAccounts] = useState(false);
+    // The network to sign in to again, when Accounts was opened for that.
+    const [signInNetwork, setSignInNetwork] = useState('');
+    const openSignIn = useCallback((network: string) => {
+        setSignInNetwork(network);
+        setShowAccounts(true);
+    }, []);
     const [showNewChat, setShowNewChat] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [theme, setTheme] = useState<Theme>('system');
@@ -95,6 +108,8 @@ export default function App() {
             }
         });
         const offAccounts = EventsOn('inbox:accounts', loadAccounts);
+        // Clicking a "signed you out" notification goes straight to signing in.
+        const offSignIn = EventsOn('accounts:signin', openSignIn);
         const offError = EventsOn('inbox:error', (e: string) => setStartError(e));
         // Clicking a desktop notification opens that chat.
         const offOpen = EventsOn('inbox:open', (roomId: string) => showChat(roomId, chatsRef.current));
@@ -103,11 +118,12 @@ export default function App() {
         return () => {
             offChange();
             offAccounts();
+            offSignIn();
             offError();
             offOpen();
             offUpdate();
         };
-    }, [loadChats, loadAccounts, showChat]);
+    }, [loadChats, loadAccounts, showChat, openSignIn]);
 
     // A chat's history can finish loading without any new message to trigger
     // a refresh, so check back while something is still loading.
@@ -291,6 +307,11 @@ export default function App() {
                     ))}
                 </div>
                 {startError && <div className="banner error">{startError}</div>}
+                {accounts.filter(a => a.needsLogin).map(a => (
+                    <button key={a.network + a.id} className="update-banner signed-out-banner" onClick={() => openSignIn(a.network)}>
+                        {a.networkName} signed you out{a.name ? ` (${a.name})` : ''}. <span>Sign in again</span>
+                    </button>
+                ))}
                 {updateStatus?.state === 'available' && (
                     <button className="update-banner" onClick={() => setShowSettings(true)}>
                         Pigeonhole {updateStatus.latest?.version} is available. <span>Update</span>
@@ -313,6 +334,8 @@ export default function App() {
                 {selectedChat
                     ? <Thread key={selectedChat.roomId} chat={selectedChat} tick={messageTick}
                               typing={typing[selectedChat.roomId] ?? NO_ONE}
+                              signedOut={signedOutOf(accounts, selectedChat.network)}
+                              onSignIn={() => openSignIn(selectedChat.network)}
                               onSetHidden={hidden => setChatHidden(selectedChat.roomId, hidden)}/>
                     : <div className="empty-thread">
                         <p>Select a conversation</p>
@@ -320,7 +343,10 @@ export default function App() {
                             <button className="primary" onClick={() => setShowAccounts(true)}>Connect an account</button>}
                     </div>}
             </main>
-            {showAccounts && <Accounts accounts={accounts} onClose={() => setShowAccounts(false)}/>}
+            {showAccounts && <Accounts key={signInNetwork} accounts={accounts} signIn={signInNetwork} onClose={() => {
+                setShowAccounts(false);
+                setSignInNetwork('');
+            }}/>}
             {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
             {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}/>}
         </div>

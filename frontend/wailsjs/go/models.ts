@@ -7,6 +7,7 @@ export namespace inbox {
 	    name: string;
 	    state: string;
 	    error: string;
+	    needsLogin: boolean;
 	    historyPending: number;
 	
 	    static createFrom(source: any = {}) {
@@ -21,6 +22,7 @@ export namespace inbox {
 	        this.name = source["name"];
 	        this.state = source["state"];
 	        this.error = source["error"];
+	        this.needsLogin = source["needsLogin"];
 	        this.historyPending = source["historyPending"];
 	    }
 	}
