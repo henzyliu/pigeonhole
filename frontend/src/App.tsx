@@ -39,6 +39,24 @@ export default function App() {
     const [showHidden, setShowHidden] = useState(false);
     const [query, setQuery] = useState('');
     const [showAccounts, setShowAccounts] = useState(false);
+    // Spins the Refresh button for a moment after reconnecting.
+    const [refreshing, setRefreshing] = useState(false);
+    const refresh = useCallback(() => {
+        setRefreshing(true);
+        Go.Refresh().catch(console.error);
+        window.setTimeout(() => setRefreshing(false), 1500);
+    }, []);
+    // ⌘R / Ctrl+R refreshes instead of reloading the window.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r') {
+                e.preventDefault();
+                refresh();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [refresh]);
     // The network to sign in to again, when Accounts was opened for that.
     const [signInNetwork, setSignInNetwork] = useState('');
     const openSignIn = useCallback((network: string) => {
@@ -240,6 +258,15 @@ export default function App() {
                                  strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 20h9"/>
                                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                            </svg>
+                        </button>
+                        <button className={`icon-button refresh-button ${refreshing ? 'spinning' : ''}`}
+                                title={`Refresh: reconnect all accounts (${navigator.platform.startsWith('Mac') ? '⌘' : 'Ctrl+'}R)`}
+                                aria-label="Refresh" onClick={refresh}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                 strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 11a8 8 0 1 0-2.3 5.7"/>
+                                <path d="M20 4v7h-7"/>
                             </svg>
                         </button>
                         <button className="icon-button" title="Settings" onClick={() => setShowSettings(true)}>

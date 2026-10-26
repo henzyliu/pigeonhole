@@ -45,6 +45,8 @@ export function PickAndSendFiles(arg1:string):Promise<void>;
 
 export function React(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function Refresh():Promise<boolean>;
+
 export function ResolveMedia(arg1:string,arg2:string):Promise<void>;
 
 export function SaveMedia(arg1:string,arg2:string):Promise<void>;

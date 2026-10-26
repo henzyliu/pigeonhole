@@ -441,10 +441,28 @@ func TestSignedOutAlert(t *testing.T) {
 	if len(alerts) != 1 || alerts[0] != "Instagram/henry" {
 		t.Fatalf("alerts after being signed out: %v", alerts)
 	}
+	state(status.StateConnecting) // a reconnect attempt while still signed out
+	state(status.StateBadCredentials)
+	if len(alerts) != 1 {
+		t.Fatalf("a failed reconnect shouldn't alert again: %v", alerts)
+	}
 	state(status.StateConnected)
 	state(status.StateBadCredentials)
 	state(status.StateLoggedOut)
 	if len(alerts) != 2 {
 		t.Fatalf("alerts after signing in and being signed out again: %v", alerts)
 	}
+}
+
+// Refreshing reconnects (once, even if pressed repeatedly) without
+// tripping over networks that have no accounts.
+func TestReconnect(t *testing.T) {
+	svc := newTestService(t)
+	if !svc.Reconnect("test") {
+		t.Fatal("the first refresh should run")
+	}
+	if svc.Reconnect("test") {
+		t.Fatal("a second refresh straight away should be skipped")
+	}
+	time.Sleep(200 * time.Millisecond) // let the resets run
 }

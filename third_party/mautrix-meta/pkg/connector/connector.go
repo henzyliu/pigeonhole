@@ -82,7 +82,16 @@ func (m *MetaConnector) ResetHTTPTransport() {
 
 func (m *MetaConnector) ResetNetworkConnections() {
 	for _, login := range m.Bridge.GetAllCachedUserLogins() {
-		login.Client.(*MetaClient).Client.ForceReconnect()
-		login.Client.(*MetaClient).E2EEClient.ResetConnection()
+		// Pigeonhole: a signed-out login has no clients to reset.
+		mc, ok := login.Client.(*MetaClient)
+		if !ok {
+			continue
+		}
+		if mc.Client != nil {
+			mc.Client.ForceReconnect()
+		}
+		if mc.E2EEClient != nil {
+			mc.E2EEClient.ResetConnection()
+		}
 	}
 }

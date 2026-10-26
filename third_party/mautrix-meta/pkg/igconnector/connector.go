@@ -84,6 +84,9 @@ func (ic *IGConnector) ResetHTTPTransport() {
 
 func (ic *IGConnector) ResetNetworkConnections() {
 	for _, login := range ic.Bridge.GetAllCachedUserLogins() {
-		login.Client.(*IGClient).Client.ForceReconnect()
+		// Pigeonhole: a signed-out login has no client to reset.
+		if c, ok := login.Client.(*IGClient); ok && c.Client != nil {
+			c.Client.ForceReconnect()
+		}
 	}
 }

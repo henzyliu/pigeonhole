@@ -272,6 +272,10 @@ func (a *App) ResolveMedia(roomID, eventID string) error {
 	return a.svc.ResolveMedia(a.ctx, roomID, eventID)
 }
 
+// Refresh reconnects every account, so each network sends anything that
+// hasn't arrived. It reports false if it was skipped (just refreshed).
+func (a *App) Refresh() bool { return a.svc.Reconnect("refresh") }
+
 // Typing lists who is typing in each chat right now, by room ID.
 func (a *App) Typing() (map[string][]string, error) { return a.svc.Typing(a.ctx) }
 

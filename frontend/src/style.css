@@ -593,6 +593,9 @@ button.switch.on .switch-knob { transform: translateX(16px); }
 .update-error { color: var(--danger); font-size: 12.5px; margin-top: 2px; }
 .update-progress { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--bg-selected); overflow: hidden; }
 .update-progress > div { height: 100%; background: var(--accent); transition: width 0.2s; }
+.refresh-button.spinning svg { animation: refresh-spin 0.8s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .refresh-button.spinning svg { animation: none; opacity: 0.5; } }
 .update-banner {
     display: block; width: calc(100% - 32px); margin: 0 16px 10px; padding: 7px 12px; text-align: left;
     border: none; border-radius: 10px; background: var(--bg-hover); color: var(--fg); font-size: 13px;

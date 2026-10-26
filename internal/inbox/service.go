@@ -66,13 +66,20 @@ type Service struct {
 	networks map[string]*Network
 	order    []string
 
-	lock   sync.Mutex
-	logins map[string]*pendingLogin
+	lock sync.Mutex
+	// lastReconnect is when every account was last reconnected; see
+	// reconnect.go.
+	lastReconnect time.Time
+	logins        map[string]*pendingLogin
 
 	backfillLock sync.Mutex
 	// backfillEnsured remembers chats already given a history task this run.
 	backfillEnsured map[string]bool
 	states          map[string]status.BridgeState
+	// signedOutAlerted holds accounts already alerted about being signed
+	// out, until they connect again, so a reconnect attempt that briefly
+	// goes through "connecting" doesn't alert twice.
+	signedOutAlerted map[string]bool
 }
 
 func New(dataDir string, log zerolog.Logger) (*Service, error) {
@@ -219,6 +226,7 @@ func (s *Service) Start(ctx context.Context) error {
 	// their messages (which explain why Meta rejected a login) are dropped.
 	s.ctx = s.Log.WithContext(ctx)
 	ctx = s.ctx
+	go s.watchForWake(ctx)
 	for _, netID := range s.order {
 		n := s.networks[netID]
 		if err := n.Bridge.Start(ctx); err != nil {
@@ -366,10 +374,20 @@ func (s *Service) onBridgeState(network string, state status.BridgeState) {
 	}
 	key := network + "/" + string(state.RemoteID)
 	s.lock.Lock()
-	prev, hadPrev := s.states[key]
 	s.states[key] = state
+	alert := false
+	switch {
+	case state.StateEvent == status.StateConnected:
+		delete(s.signedOutAlerted, key)
+	case needsLogin(state) && !s.signedOutAlerted[key]:
+		if s.signedOutAlerted == nil {
+			s.signedOutAlerted = make(map[string]bool)
+		}
+		s.signedOutAlerted[key] = true
+		alert = true
+	}
 	s.lock.Unlock()
-	if needsLogin(state) && (!hadPrev || !needsLogin(prev)) && s.OnSignedOut != nil {
+	if alert && s.OnSignedOut != nil {
 		name := state.RemoteName
 		if name == "" {
 			name = string(state.RemoteID)
