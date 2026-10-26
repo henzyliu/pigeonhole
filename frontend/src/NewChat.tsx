@@ -77,9 +77,9 @@ export default function NewChat(props: {onClose: () => void; onOpened: (roomId: 
                 {!searching && results?.length === 0 && <p className="muted">No one found.</p>}
                 {results === null && !searching && (
                     <p className="fine-print">
-                        Use this to open Messenger chats that haven't appeared yet. Their history loads from
-                        your secure storage. Opening a new chat may move it to the top of your Messenger list
-                        on other devices; the other person isn't notified unless you send a message.
+                        Find someone on any of your connected accounts to start or reopen a chat with them.
+                        They aren't notified unless you send a message. On Messenger and Instagram, opening a
+                        new chat may move it to the top of your list on your other devices.
                     </p>
                 )}
             </div>
