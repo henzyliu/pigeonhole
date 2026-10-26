@@ -342,8 +342,11 @@ func (s *Store) HandleEvent(ctx context.Context, evt *event.Event, countUnread b
 			// to replace its thumbnail) as not to be shown as edited.
 			hidden, _ := evt.Content.Raw["com.beeper.dont_render_edited"].(bool)
 			var newContent []byte
-			if newContent, err = json.Marshal(msg.NewContent); err == nil {
-				err = s.applyEdit(ctx, msg.RelatesTo.EventID, newContent, !hidden)
+			if newContent, err = editedContent(evt.Content, msg.NewContent); err == nil {
+				// An edit that leaves the text alone (e.g. Discord adding a
+				// link's preview after it's sent) isn't shown as edited.
+				shown := !hidden && s.textChanged(ctx, msg.RelatesTo.EventID, msg.NewContent.Body)
+				err = s.applyEdit(ctx, msg.RelatesTo.EventID, newContent, shown)
 			}
 			break
 		}

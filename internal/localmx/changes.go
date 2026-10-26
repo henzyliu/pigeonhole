@@ -3,8 +3,11 @@ package localmx
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"strings"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -119,4 +122,42 @@ func failLeftoverChanges(db *sql.DB) error {
 		UPDATE events SET change_failed=pending_kind, pending_kind='', pending_id='', pending_content=''
 		WHERE pending_kind<>''`)
 	return err
+}
+
+// editedContent is an edit's new content as stored. Bridges can put fields
+// the parsed content doesn't know about (such as Discord's link previews)
+// in the raw m.new_content, so those are kept too.
+func editedContent(content event.Content, parsed *event.MessageEventContent) ([]byte, error) {
+	raw, err := json.Marshal(parsed)
+	if err != nil {
+		return nil, err
+	}
+	extra, ok := content.Raw["m.new_content"].(map[string]any)
+	if !ok || len(extra) == 0 {
+		return raw, nil
+	}
+	merged := make(map[string]any)
+	if err = json.Unmarshal(raw, &merged); err != nil {
+		return nil, err
+	}
+	for key, value := range extra {
+		if _, set := merged[key]; !set {
+			merged[key] = value
+		}
+	}
+	return json.Marshal(merged)
+}
+
+// textChanged reports whether an edit changes a message's text, as opposed
+// to only filling in something else, like a link preview.
+func (s *Store) textChanged(ctx context.Context, target id.EventID, newBody string) bool {
+	var raw string
+	if err := s.DB.QueryRowContext(ctx, "SELECT content FROM events WHERE event_id=?", target).Scan(&raw); err != nil {
+		return true
+	}
+	var old struct {
+		Body string `json:"body"`
+	}
+	_ = json.Unmarshal([]byte(raw), &old)
+	return strings.TrimSpace(old.Body) != strings.TrimSpace(newBody)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -447,5 +448,56 @@ func TestPendingChanges(t *testing.T) {
 	}
 	if r := get("$2"); r.failed != "" {
 		t.Fatalf("an old failure should be forgotten: %+v", r)
+	}
+}
+
+// Discord adds a link's preview by editing the message after it's sent,
+// with the preview in the raw m.new_content: it's kept, and the message
+// isn't marked edited since its text didn't change. A real edit still is.
+func TestEditAddingPreview(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(t.TempDir(), "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if err = store.CreateRoom(ctx, "!a:local", "discord", true, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	link := "https://youtube.com/shorts/abc"
+	send := func(evtID string, content event.Content) {
+		t.Helper()
+		evt := &event.Event{ID: id.EventID(evtID), RoomID: "!a:local", Sender: "@me:local", Type: event.EventMessage, Timestamp: 1, Content: content}
+		if err := store.HandleEvent(ctx, evt, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	edit := func(evtID, body string, extra map[string]any) {
+		c := &event.MessageEventContent{MsgType: event.MsgText, Body: body}
+		c.SetEdit("$1")
+		send(evtID, event.Content{Parsed: c, Raw: map[string]any{"m.new_content": extra}})
+	}
+	get := func() (edited bool, raw string) {
+		t.Helper()
+		if err := store.DB.QueryRow("SELECT edited, content FROM events WHERE event_id='$1'").Scan(&edited, &raw); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	send("$1", event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: link}})
+
+	edit("$2", link, map[string]any{"com.beeper.linkpreviews": []any{map[string]any{"matched_url": link, "og:title": "A short"}}})
+	edited, raw := get()
+	var stored event.MessageEventContent
+	if err = json.Unmarshal([]byte(raw), &stored); err != nil {
+		t.Fatal(err)
+	}
+	if edited || stored.Body != link || len(stored.BeeperLinkPreviews) != 1 || stored.BeeperLinkPreviews[0].Title != "A short" {
+		t.Fatalf("adding a preview: edited %v, content %s", edited, raw)
+	}
+
+	edit("$3", link+" so good", nil)
+	if edited, raw = get(); !edited || !strings.Contains(raw, "so good") {
+		t.Fatalf("a real edit should show as edited: %v %s", edited, raw)
 	}
 }
