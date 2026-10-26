@@ -686,6 +686,29 @@ func (s *Service) UnreadChats(ctx context.Context) (int, error) {
 	return n, err
 }
 
+// Typing lists the names of who is typing in each chat right now.
+func (s *Service) Typing(ctx context.Context) (map[string][]string, error) {
+	typing := s.Store.Typing()
+	if len(typing) == 0 {
+		return map[string][]string{}, nil
+	}
+	profiles, err := s.profiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string][]string, len(typing))
+	for roomID, users := range typing {
+		for _, userID := range users {
+			name := profiles[userID].name
+			if name == "" {
+				name = "Someone"
+			}
+			out[string(roomID)] = append(out[string(roomID)], name)
+		}
+	}
+	return out, nil
+}
+
 // SetDraft saves the unsent message in a chat; empty text clears it.
 func (s *Service) SetDraft(ctx context.Context, roomID, text, replyTo string) error {
 	return s.Store.SetDraft(ctx, id.RoomID(roomID), text, id.EventID(replyTo))

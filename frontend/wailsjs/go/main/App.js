@@ -98,6 +98,10 @@ export function SendFiles(arg1, arg2) {
   return window['go']['main']['App']['SendFiles'](arg1, arg2);
 }
 
+export function SendPastedFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendPastedFile'](arg1, arg2, arg3);
+}
+
 export function SendText(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendText'](arg1, arg2, arg3);
 }
@@ -152,6 +156,10 @@ export function StartupError() {
 
 export function SubmitLogin(arg1, arg2) {
   return window['go']['main']['App']['SubmitLogin'](arg1, arg2);
+}
+
+export function Typing() {
+  return window['go']['main']['App']['Typing']();
 }
 
 export function Version() {

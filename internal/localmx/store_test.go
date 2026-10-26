@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -299,5 +300,56 @@ func TestDrafts(t *testing.T) {
 	_ = store.SetDraft(ctx, "!a:local", "", "$q")
 	if text, reply := get(); text != "" || reply != "" || notified != 2 {
 		t.Fatalf("clearing: draft %q reply %q, %d notifications", text, reply, notified)
+	}
+}
+
+// Typing shows until it's stopped, runs out, or the person's message
+// arrives; the local user's own typing isn't listed.
+func TestTyping(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(t.TempDir(), "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if err = store.CreateRoom(ctx, "!a:local", "messenger", true, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	changes := make(chan Change, 10)
+	store.Notify = func(c Change) {
+		if c.Kind == "typing" {
+			changes <- c
+		}
+	}
+	typing := func() []id.UserID { return store.Typing()["!a:local"] }
+
+	store.SetTyping("!a:local", "@me:local", time.Minute)
+	if len(typing()) != 0 {
+		t.Fatal("your own typing shouldn't show")
+	}
+	store.SetTyping("!a:local", "@sam:local", time.Minute)
+	if got := typing(); len(got) != 1 || got[0] != "@sam:local" {
+		t.Fatalf("typing: %v", got)
+	}
+	<-changes
+	evt := &event.Event{ID: "$1", RoomID: "!a:local", Sender: "@sam:local", Type: event.EventMessage, Timestamp: 1,
+		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "hi"}}}
+	if err = store.insertMessage(ctx, evt, evt.Content.AsMessage(), false); err != nil {
+		t.Fatal(err)
+	}
+	if len(typing()) != 0 {
+		t.Fatal("sending a message should stop typing")
+	}
+	<-changes
+
+	store.SetTyping("!a:local", "@sam:local", 50*time.Millisecond)
+	<-changes
+	select {
+	case <-changes:
+	case <-time.After(2 * time.Second):
+		t.Fatal("typing should run out")
+	}
+	if len(typing()) != 0 {
+		t.Fatal("typing should have run out")
 	}
 }

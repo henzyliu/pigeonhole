@@ -67,9 +67,7 @@ func (in *Intent) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool)
 }
 
 func (in *Intent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType bridgev2.TypingType, timeout time.Duration) error {
-	if timeout > 0 {
-		in.c.Store.notify("typing", roomID)
-	}
+	in.c.Store.SetTyping(roomID, in.mxid, timeout)
 	return nil
 }
 

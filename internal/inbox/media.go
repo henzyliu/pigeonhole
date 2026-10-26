@@ -45,11 +45,18 @@ func (s *Service) SendFile(ctx context.Context, roomID, path string) error {
 	if err != nil {
 		return err
 	}
+	return s.SendData(ctx, roomID, filepath.Base(path), data)
+}
+
+// SendData sends a file that isn't on disk, such as a pasted image.
+func (s *Service) SendData(ctx context.Context, roomID, name string, data []byte) error {
+	if len(data) > MaxUploadSize {
+		return fmt.Errorf("%s is larger than 25 MB", name)
+	}
 	n, err := s.roomNetwork(ctx, roomID)
 	if err != nil {
 		return err
 	}
-	name := filepath.Base(path)
 	mimeType := detectMime(name, data)
 	uri, _, err := n.MX.BotIntent().UploadMedia(ctx, id.RoomID(roomID), data, name, mimeType)
 	if err != nil {

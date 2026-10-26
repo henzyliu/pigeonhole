@@ -64,6 +64,14 @@ export function displayURL(label: string): string {
     return s.length > MAX_LABEL ? s.slice(0, MAX_LABEL - 1) + '…' : s;
 }
 
+// typingText says who is typing: just "typing…" in a one-to-one chat.
+export function typingText(names: string[], isDm: boolean): string {
+    if (isDm || names.length === 0) return 'typing…';
+    if (names.length === 1) return `${names[0]} is typing…`;
+    if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+    return 'Several people are typing…';
+}
+
 // Links open in the default browser. A plain target="_blank" link does
 // nothing in the Mac webview and opens a bare Edge window on Windows.
 export function openLink(url: string) {

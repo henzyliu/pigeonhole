@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -206,6 +207,19 @@ func (a *App) SendFiles(roomID string, paths []string) error {
 	return nil
 }
 
+// SendPastedFile sends a file pasted into the message box, given as
+// base64.
+func (a *App) SendPastedFile(roomID, name, data string) error {
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return fmt.Errorf("couldn't read the pasted file: %w", err)
+	}
+	if name = filepath.Base(name); name == "." || name == "/" {
+		name = "pasted"
+	}
+	return a.svc.SendData(a.ctx, roomID, name, raw)
+}
+
 // PickAndSendFiles opens the native file picker and sends the chosen files.
 func (a *App) PickAndSendFiles(roomID string) error {
 	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{Title: "Send files"})
@@ -226,6 +240,9 @@ func (a *App) MarkRead(roomID string) error { return a.svc.MarkRead(a.ctx, roomI
 func (a *App) ResolveMedia(roomID, eventID string) error {
 	return a.svc.ResolveMedia(a.ctx, roomID, eventID)
 }
+
+// Typing lists who is typing in each chat right now, by room ID.
+func (a *App) Typing() (map[string][]string, error) { return a.svc.Typing(a.ctx) }
 
 // SetDraft saves the unsent message typed in a chat (and the message it
 // replies to); empty text clears it.

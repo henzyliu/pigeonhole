@@ -20,6 +20,8 @@ const CATEGORIES: {id: Category; label: string; alwaysShown?: boolean}[] = [
 ];
 // Like the Messenger app, requests aren't a tab: they open from a row under the tabs.
 
+
+const NO_ONE: string[] = [];
 export default function App() {
     const [chats, setChats] = useState<inbox.Chat[]>([]);
     const [accounts, setAccounts] = useState<inbox.Account[]>([]);
@@ -45,6 +47,8 @@ export default function App() {
     }, []);
     const [startError, setStartError] = useState('');
     const [messageTick, setMessageTick] = useState(0);
+    // Who is typing in each chat, by room ID.
+    const [typing, setTyping] = useState<Record<string, string[]>>({});
     const selectedRef = useRef(selected);
     selectedRef.current = selected;
     const chatsRef = useRef(chats);
@@ -82,6 +86,9 @@ export default function App() {
             if (change.kind === 'rooms' || change.kind === 'messages') {
                 window.clearTimeout(chatTimer);
                 chatTimer = window.setTimeout(loadChats, 150);
+            }
+            if (change.kind === 'typing') {
+                Go.Typing().then(t => setTyping(t ?? {})).catch(console.error);
             }
             if (change.kind === 'messages' && change.roomId === selectedRef.current) {
                 setMessageTick(t => t + 1);
@@ -289,7 +296,7 @@ export default function App() {
                         Pigeonhole {updateStatus.latest?.version} is available. <span>Update</span>
                     </button>
                 )}
-                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText}
+                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText} typing={typing}
                           onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
                           onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>
                 {!query.trim() && !showHidden && hiddenCount > 0 && (
@@ -305,6 +312,7 @@ export default function App() {
             <main className="main">
                 {selectedChat
                     ? <Thread key={selectedChat.roomId} chat={selectedChat} tick={messageTick}
+                              typing={typing[selectedChat.roomId] ?? NO_ONE}
                               onSetHidden={hidden => setChatHidden(selectedChat.roomId, hidden)}/>
                     : <div className="empty-thread">
                         <p>Select a conversation</p>

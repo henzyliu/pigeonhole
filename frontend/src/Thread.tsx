@@ -1,14 +1,20 @@
-import {CSSProperties, Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {ClipboardEvent, CSSProperties, Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
-import {linkify, openLink} from './links';
+import {linkify, openLink, typingText} from './links';
+import EmojiPicker from './EmojiPicker';
 import MediaViewer from './MediaViewer';
 import NetworkIcon from './NetworkIcon';
 
 const PAGE = 50;
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👍'];
 
-export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidden: (hidden: boolean) => Promise<void>}) {
+export default function Thread(props: {
+    chat: inbox.Chat;
+    tick: number;
+    typing: string[];
+    onSetHidden: (hidden: boolean) => Promise<void>;
+}) {
     const {chat} = props;
     const [messages, setMessages] = useState<inbox.Message[]>([]);
     // The message being typed starts from the chat's saved draft.
@@ -123,7 +129,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         } else if (stickToBottom.current) {
             el.scrollTop = el.scrollHeight;
         }
-    }, [messages]);
+    }, [messages, props.typing]);
 
     const loadOlder = async () => {
         if (!hasMore || messages.length === 0) return;
@@ -161,6 +167,26 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             send();
+        }
+    };
+
+    // Pasting a picture (or a copied file) sends it, like dropping it on
+    // the window; pasted text goes into the box as usual.
+    const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+        const files = [...e.clipboardData.items].filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(f => f !== null);
+        if (files.length === 0) return;
+        e.preventDefault();
+        setError('');
+        stickToBottom.current = true;
+        for (const file of files) {
+            if (file.size > 25 * 1024 * 1024) {
+                setError(`${file.name || 'The pasted file'} is larger than 25 MB`);
+                continue;
+            }
+            const name = file.name && file.name !== 'image.png' ? file.name : `Pasted image.${file.type.split('/')[1] || 'png'}`;
+            readBase64(file)
+                .then(data => Go.SendPastedFile(chat.roomId, name, data))
+                .catch(err => setError(errorText(err)));
         }
     };
 
@@ -215,6 +241,12 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                         </Fragment>
                     );
                 })}
+                {props.typing.length > 0 && (
+                    <div className="typing-row" aria-live="polite">
+                        <span className="typing-dots" aria-hidden="true"><i/><i/><i/></span>
+                        {chat.isDm ? `${chat.name} is typing…` : typingText(props.typing, false)}
+                    </div>
+                )}
             </div>
             {error && <div className="banner error">{error}</div>}
             {replyTo && (
@@ -233,7 +265,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                     </svg>
                 </button>
                 <textarea ref={composer} rows={1} placeholder={`Message ${chat.name}`} value={draft}
-                          onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} autoFocus/>
+                          onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>Send</button>
             </div>
             {viewingIndex >= 0 && (
@@ -242,6 +274,16 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
             )}
         </section>
     );
+}
+
+// readBase64 reads a file as base64, to pass to Go.
+function readBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+        reader.onerror = () => reject(reader.error ?? new Error('Couldn\'t read the pasted file'));
+        reader.readAsDataURL(file);
+    });
 }
 
 function snippet(m: inbox.Message): string {
@@ -263,6 +305,14 @@ function MessageRow(props: {
 }) {
     const {msg} = props;
     const [picking, setPicking] = useState(false);
+    // Where the full emoji picker opens from, while it's open.
+    const [moreFrom, setMoreFrom] = useState<DOMRect | null>(null);
+    const {onReact} = props;
+    const pickMore = useCallback((emoji: string) => {
+        setMoreFrom(null);
+        onReact(emoji);
+    }, [onReact]);
+    const closeMore = useCallback(() => setMoreFrom(null), []);
     const actionsRef = useRef<HTMLDivElement>(null);
 
     // Once opened, the emoji bar stays until you pick one, click elsewhere or
@@ -322,8 +372,18 @@ function MessageRow(props: {
                                             setPicking(false);
                                         }}>{r}</button>
                                     ))}
+                                    <button className="more-reactions" title="More reactions" aria-label="More reactions"
+                                            onClick={e => {
+                                                setMoreFrom(e.currentTarget.getBoundingClientRect());
+                                                setPicking(false);
+                                            }}>
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                            <path d="M12 5v14M5 12h14"/>
+                                        </svg>
+                                    </button>
                                 </div>
                             )}
+                            {moreFrom && <EmojiPicker anchor={moreFrom} onPick={pickMore} onClose={closeMore}/>}
                         </div>
                     )}
                 </div>

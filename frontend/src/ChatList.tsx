@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {formatTime, inbox, NETWORK_LABELS} from './api';
 import Avatar from './Avatar';
-import {splitLinks} from './links';
+import {splitLinks, typingText} from './links';
 
 export default function ChatList(props: {
     chats: inbox.Chat[];
@@ -10,6 +10,7 @@ export default function ChatList(props: {
     onSetHidden: (roomId: string, hidden: boolean) => void;
     onSetMuted: (roomId: string, muted: boolean) => void;
     emptyText: string;
+    typing: Record<string, string[]>;
 }) {
     // The chat's ⋯ menu, shown on hover. Acting from here doesn't open the
     // chat, so nothing is marked as read.
@@ -33,7 +34,9 @@ export default function ChatList(props: {
                             <span className="chat-time">{formatTime(chat.lastTs)}</span>
                         </div>
                         <div className="chat-row-bottom">
-                            {chat.draft && chat.roomId !== props.selected
+                            {props.typing[chat.roomId]?.length
+                                ? <span className="chat-preview typing-preview">{typingText(props.typing[chat.roomId], chat.isDm)}</span>
+                                : chat.draft && chat.roomId !== props.selected
                                 ? <span className="chat-preview"><span className="draft-label">Draft:</span> {chat.draft.replace(/\s+/g, ' ')}</span>
                                 : <span className="chat-preview">{chat.lastFromMe && 'You: '}{plainPreview(chat.preview)}</span>}
                             {chat.unread > 0

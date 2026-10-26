@@ -112,6 +112,9 @@ type Store struct {
 	OnIncoming func(roomID id.RoomID, sender id.UserID, ts int64, preview string)
 
 	lock sync.Mutex
+
+	typingLock sync.Mutex
+	typing     map[id.RoomID]map[id.UserID]time.Time
 }
 
 func OpenStore(dataDir string, me id.UserID) (*Store, error) {
@@ -362,6 +365,8 @@ func (s *Store) insertMessage(ctx context.Context, evt *event.Event, msg *event.
 	} else if n, _ := res.RowsAffected(); n == 0 {
 		return nil
 	}
+	// Someone who has just sent a message has stopped typing it.
+	s.SetTyping(evt.RoomID, evt.Sender, 0)
 	unread := 0
 	if countUnread && !s.isSelf(evt.Sender) {
 		unread = 1

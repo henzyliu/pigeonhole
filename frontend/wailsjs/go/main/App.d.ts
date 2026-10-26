@@ -51,6 +51,8 @@ export function SearchPeople(arg1:string):Promise<Array<inbox.Person>>;
 
 export function SendFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
+export function SendPastedFile(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SendText(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetAccountNotifications(arg1:string,arg2:string,arg3:boolean):Promise<void>;
@@ -78,6 +80,8 @@ export function StartLogin(arg1:string,arg2:string):Promise<inbox.LoginStep>;
 export function StartupError():Promise<string>;
 
 export function SubmitLogin(arg1:string,arg2:Record<string, string>):Promise<inbox.LoginStep>;
+
+export function Typing():Promise<Record<string, Array<string>>>;
 
 export function Version():Promise<main.VersionInfo>;
 
