@@ -1,0 +1,75 @@
+name: Discord bridge check
+
+# Pigeonhole's Discord support uses mautrix-discord's bridgev2 rewrite
+# (the megadiscord branch), pinned to one commit in go.mod because it isn't
+# released yet. Every Monday this checks whether that has changed: a new
+# release after v0.7.7 (the last one from before the rewrite), or the
+# rewrite reaching the bridge's main branch. Either opens an issue here,
+# which GitHub emails about. It won't open another while one is still open.
+
+on:
+  schedule:
+    - cron: "0 21 * * 0" # Sunday 21:00 UTC: Monday morning in New Zealand
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM: mautrix/discord
+      LAST_OLD_RELEASE: v0.7.7
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          # The pinned commit is the last part of the pseudo-version in go.mod.
+          pin=$(awk '/go.mau.fi\/mautrix-discord / {print $2}' go.mod | head -1)
+          commit=${pin##*-}
+          echo "Pinned: $pin (commit $commit)"
+
+          latest=$(gh release view -R "$UPSTREAM" --json tagName -q .tagName)
+          echo "Latest release: $latest"
+          ahead=$(gh api "repos/$UPSTREAM/compare/$commit...megadiscord" -q .ahead_by 2>/dev/null || echo "?")
+          echo "megadiscord commits since the pin: $ahead"
+          on_main=no
+          if gh api "repos/$UPSTREAM/contents/pkg/connector?ref=main" >/dev/null 2>&1; then on_main=yes; fi
+          echo "Rewrite on main: $on_main"
+
+          news=()
+          title="Discord bridge: bridgev2 rewrite merged upstream"
+          newest=$(printf '%s\n%s\n' "$LAST_OLD_RELEASE" "$latest" | sort -V | tail -1)
+          if [ "$latest" != "$LAST_OLD_RELEASE" ] && [ "$newest" = "$latest" ]; then
+            news+=("a new release, **$latest** (https://github.com/$UPSTREAM/releases/tag/$latest)")
+            title="Discord bridge: $latest released"
+          fi
+          if [ "$on_main" = yes ]; then
+            news+=("the bridgev2 rewrite is now on the **main** branch (\`pkg/connector\` exists there)")
+          fi
+          if [ ${#news[@]} -eq 0 ]; then
+            echo "Nothing new."
+            exit 0
+          fi
+
+          gh label create discord-bridge --color 5865F2 --description "Upstream Discord bridge news" --force >/dev/null
+          if [ -n "$(gh issue list --label discord-bridge --state open --json number -q '.[].number')" ]; then
+            echo "An issue about this is already open."
+            exit 0
+          fi
+          {
+            echo "The Discord bridge Pigeonhole uses has changed upstream:"
+            echo
+            for item in "${news[@]}"; do echo "- $item"; done
+            echo
+            echo "Pigeonhole is pinned to \`$pin\` (commit [\`$commit\`](https://github.com/$UPSTREAM/commit/$commit))."
+            echo "The megadiscord branch is $ahead commits ahead of that."
+            echo
+            echo "To move to the released bridge: update \`go.mau.fi/mautrix-discord\` in go.mod, check whether the"
+            echo "\`github.com/bwmarrin/discordgo\` replace is still needed, then build, test and try a Discord login."
+            echo
+            echo "_Opened by .github/workflows/discord-bridge.yml. Close this once it's dealt with._"
+          } > body.md
+          gh issue create --title "$title" --body-file body.md --label discord-bridge
