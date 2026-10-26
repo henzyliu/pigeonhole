@@ -13,6 +13,8 @@ export function Chats():Promise<Array<inbox.Chat>>;
 
 export function CheckForUpdates():Promise<main.UpdateStatus>;
 
+export function EditMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function GetSettings():Promise<main.Settings>;
 
 export function GetUpdateStatus():Promise<main.UpdateStatus>;
@@ -82,6 +84,8 @@ export function StartupError():Promise<string>;
 export function SubmitLogin(arg1:string,arg2:Record<string, string>):Promise<inbox.LoginStep>;
 
 export function Typing():Promise<Record<string, Array<string>>>;
+
+export function UnsendMessage(arg1:string,arg2:string):Promise<void>;
 
 export function Version():Promise<main.VersionInfo>;
 

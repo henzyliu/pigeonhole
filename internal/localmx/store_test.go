@@ -2,6 +2,8 @@ package localmx
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -351,5 +353,99 @@ func TestTyping(t *testing.T) {
 	}
 	if len(typing()) != 0 {
 		t.Fatal("typing should have run out")
+	}
+}
+
+// An edit or unsend only changes the stored message once the network
+// confirms it; a refusal (or a restart before it's answered) leaves the
+// message as it was and notes the failure.
+func TestPendingChanges(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := OpenStore(dir, "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CreateRoom(ctx, "!a:local", "messenger", true, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	for i, body := range []string{"one", "two", "three"} {
+		evt := &event.Event{ID: id.EventID(fmt.Sprintf("$%d", i+1)), RoomID: "!a:local", Sender: "@me:local", Type: event.EventMessage,
+			Timestamp: int64(i + 1), Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: body}}}
+		if err = store.HandleEvent(ctx, evt, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type row struct {
+		body                       string
+		edited, redacted           bool
+		pending, pendingID, failed string
+	}
+	get := func(eventID string) (r row) {
+		t.Helper()
+		var raw string
+		if err := store.DB.QueryRow("SELECT content, edited, redacted, pending_kind, pending_id, change_failed FROM events WHERE event_id=?", eventID).
+			Scan(&raw, &r.edited, &r.redacted, &r.pending, &r.pendingID, &r.failed); err != nil {
+			t.Fatal(err)
+		}
+		var c struct{ Body string }
+		_ = json.Unmarshal([]byte(raw), &c)
+		r.body = c.Body
+		return
+	}
+	preview := func() (p string) {
+		_ = store.DB.QueryRow("SELECT preview FROM rooms WHERE room_id='!a:local'").Scan(&p)
+		return
+	}
+
+	// An edit that goes through.
+	if err = store.StartChange(ctx, "!a:local", "$3", ChangeEdit, "$e1", []byte(`{"msgtype":"m.text","body":"THREE"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.StartChange(ctx, "!a:local", "$3", ChangeUnsend, "$x", nil); err != ErrChangePending {
+		t.Fatalf("a second change while one is pending: %v", err)
+	}
+	if r := get("$3"); r.body != "three" || r.pending != ChangeEdit || r.edited {
+		t.Fatalf("pending edit shouldn't change the message yet: %+v", r)
+	}
+	store.SetEventStatus(ctx, "$e1", "!a:local", "pending")
+	store.SetEventStatus(ctx, "$e1", "!a:local", StatusSuccess)
+	if r := get("$3"); r.body != "THREE" || !r.edited || r.pending != "" || preview() != "THREE" {
+		t.Fatalf("confirmed edit: %+v, preview %q", r, preview())
+	}
+	store.SetEventStatus(ctx, "$e1", "!a:local", StatusDelivered) // late statuses change nothing
+
+	// An edit the network refuses.
+	_ = store.StartChange(ctx, "!a:local", "$2", ChangeEdit, "$e2", []byte(`{"msgtype":"m.text","body":"TWO"}`))
+	store.SetEventStatus(ctx, "$e2", "!a:local", "fail")
+	if r := get("$2"); r.body != "two" || r.edited || r.pending != "" || r.failed != ChangeEdit {
+		t.Fatalf("refused edit: %+v", r)
+	}
+
+	// An unsend that goes through, and one that times out.
+	_ = store.StartChange(ctx, "!a:local", "$3", ChangeUnsend, "$u1", nil)
+	store.SetEventStatus(ctx, "$u1", "!a:local", StatusSuccess)
+	if r := get("$3"); !r.redacted || preview() != DeletedPreview {
+		t.Fatalf("confirmed unsend: %+v, preview %q", r, preview())
+	}
+	_ = store.StartChange(ctx, "!a:local", "$1", ChangeUnsend, "$u2", nil)
+	store.FailChange(ctx, "$u2")
+	if r := get("$1"); r.redacted || r.failed != ChangeUnsend {
+		t.Fatalf("timed-out unsend: %+v", r)
+	}
+
+	// A change still waiting when the app quits counts as failed next time,
+	// and older failures are forgotten.
+	_ = store.StartChange(ctx, "!a:local", "$1", ChangeEdit, "$e3", []byte(`{"msgtype":"m.text","body":"ONE"}`))
+	store.DB.Close()
+	if store, err = OpenStore(dir, "@me:local"); err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if r := get("$1"); r.body != "one" || r.pending != "" || r.failed != ChangeEdit {
+		t.Fatalf("left over edit: %+v", r)
+	}
+	if r := get("$2"); r.failed != "" {
+		t.Fatalf("an old failure should be forgotten: %+v", r)
 	}
 }

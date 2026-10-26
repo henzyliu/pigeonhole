@@ -22,6 +22,10 @@ export default function Thread(props: {
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
     // The draft's reply, until that message has loaded and can be shown.
     const pendingReply = useRef(chat.draftReply ?? '');
+    // The message being edited, which borrows the message box; the draft
+    // that was there comes back afterwards.
+    const [editing, setEditing] = useState<inbox.Message | null>(null);
+    const draftBeforeEdit = useRef('');
     const [error, setError] = useState('');
     const [hasMore, setHasMore] = useState(true);
     // The photo or video open in the full-window viewer, by event ID.
@@ -94,13 +98,14 @@ export default function Thread(props: {
         Go.SetDraft(chat.roomId, next.text, next.reply).catch(console.error);
     }, [chat.roomId]);
     useEffect(() => {
+        if (editing) return;
         const text = draft.trim() ? draft : '';
         // A reply still waiting to load stays part of the draft.
         const reply = text ? (replyTo?.eventId ?? pendingReply.current) : '';
         unsaved.current = {text, reply};
         const timer = window.setTimeout(saveDraft, 400);
         return () => window.clearTimeout(timer);
-    }, [draft, replyTo, saveDraft]);
+    }, [draft, replyTo, saveDraft, editing]);
     useEffect(() => saveDraft, [saveDraft]);
 
     // Files dropped anywhere on the window go to the open conversation.
@@ -147,7 +152,45 @@ export default function Thread(props: {
         if (el.scrollTop < 120) loadOlder().catch(console.error);
     };
 
+    const startEdit = (msg: inbox.Message) => {
+        if (!editing) draftBeforeEdit.current = draft;
+        setEditing(msg);
+        setDraft(msg.body);
+        setError('');
+        window.setTimeout(() => {
+            const el = composer.current;
+            el?.focus();
+            el?.setSelectionRange(el.value.length, el.value.length);
+        });
+    };
+
+    const stopEditing = () => {
+        setEditing(null);
+        setDraft(draftBeforeEdit.current);
+    };
+
+    // The message shows the new text at once, marked as saving, and only
+    // changes for good once the network confirms it.
+    const saveEdit = () => {
+        const target = editing!;
+        const text = draft.trim();
+        if (!text) {
+            setError('A message can\'t be edited to nothing. To remove it, unsend it instead.');
+            return;
+        }
+        stopEditing();
+        if (text === target.body.trim()) return;
+        Go.EditMessage(chat.roomId, target.eventId, text).catch(e => setError(errorText(e)));
+    };
+
+    const unsend = (msg: inbox.Message) =>
+        Go.UnsendMessage(chat.roomId, msg.eventId).catch(e => setError(errorText(e)));
+
     const send = async () => {
+        if (editing) {
+            saveEdit();
+            return;
+        }
         const text = draft.trim();
         if (!text) return;
         setDraft('');
@@ -167,6 +210,16 @@ export default function Thread(props: {
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             send();
+        } else if (e.key === 'Escape' && editing) {
+            e.preventDefault();
+            stopEditing();
+        } else if (e.key === 'ArrowUp' && !draft && !editing) {
+            // Up in an empty box edits your last message, as in Slack.
+            const last = [...messages].reverse().find(m => m.isMe && !m.redacted);
+            if (last?.canEdit) {
+                e.preventDefault();
+                startEdit(last);
+            }
         }
     };
 
@@ -236,6 +289,7 @@ export default function Thread(props: {
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => startReply(m)} onReact={key => react(m, key)}
+                                        onEdit={() => startEdit(m)} onUnsend={() => unsend(m)}
                                         onOpenMedia={() => setViewing(m.eventId)}
                                         onFetch={() => Go.ResolveMedia(chat.roomId, m.eventId)}/>
                         </Fragment>
@@ -249,7 +303,16 @@ export default function Thread(props: {
                 )}
             </div>
             {error && <div className="banner error">{error}</div>}
-            {replyTo && (
+            {editing && (
+                <div className="reply-bar">
+                    <div>
+                        <div className="reply-label">Editing message</div>
+                        <div className="reply-snippet">{editing.body}</div>
+                    </div>
+                    <button className="icon-button" title="Cancel (Esc)" onClick={stopEditing}>✕</button>
+                </div>
+            )}
+            {replyTo && !editing && (
                 <div className="reply-bar">
                     <div>
                         <div className="reply-label">Replying to {replyTo.isMe ? 'yourself' : replyTo.senderName}</div>
@@ -264,9 +327,9 @@ export default function Thread(props: {
                         <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l7.9-7.9"/>
                     </svg>
                 </button>
-                <textarea ref={composer} rows={1} placeholder={`Message ${chat.name}`} value={draft}
+                <textarea ref={composer} rows={1} placeholder={editing ? 'Edit message' : `Message ${chat.name}`} value={draft}
                           onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} autoFocus/>
-                <button className="primary" onClick={send} disabled={!draft.trim()}>Send</button>
+                <button className="primary" onClick={send} disabled={!draft.trim()}>{editing ? 'Save' : 'Send'}</button>
             </div>
             {viewingIndex >= 0 && (
                 <MediaViewer items={media} index={viewingIndex}
@@ -300,11 +363,15 @@ function MessageRow(props: {
     replied?: inbox.Message;
     onReply: () => void;
     onReact: (key: string) => void;
+    onEdit: () => void;
+    onUnsend: () => void;
     onOpenMedia: () => void;
     onFetch: () => Promise<void>;
 }) {
     const {msg} = props;
     const [picking, setPicking] = useState(false);
+    // Unsending asks first, just under the message.
+    const [confirmUnsend, setConfirmUnsend] = useState(false);
     // Where the full emoji picker opens from, while it's open.
     const [moreFrom, setMoreFrom] = useState<DOMRect | null>(null);
     const {onReact} = props;
@@ -344,7 +411,7 @@ function MessageRow(props: {
                     <div className="msg-quote">{props.replied ? snippet(props.replied) : 'Original message'}</div>
                 )}
                 <div className="msg-line">
-                    <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''}`} title={new Date(msg.ts).toLocaleString()}>
+                    <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''} ${msg.pending ? 'changing' : ''}`} title={new Date(msg.ts).toLocaleString()}>
                         <MessageBody msg={msg} onOpenMedia={props.onOpenMedia} onFetch={props.onFetch}/>
                     </div>
                     {!msg.redacted && (
@@ -364,6 +431,24 @@ function MessageRow(props: {
                                     <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
                                 </svg>
                             </button>
+                            {msg.canEdit && (
+                                <button title="Edit" aria-label="Edit" onClick={props.onEdit}>
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                         strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/>
+                                        <path d="m13.5 6.5 4 4"/>
+                                    </svg>
+                                </button>
+                            )}
+                            {msg.canUnsend && (
+                                <button title="Unsend" aria-label="Unsend" onClick={() => setConfirmUnsend(true)}>
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                         strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M4 7h16M10 11v6M14 11v6"/>
+                                        <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>
+                                    </svg>
+                                </button>
+                            )}
                             {picking && (
                                 <div className="reaction-picker">
                                     {QUICK_REACTIONS.map(r => (
@@ -388,6 +473,16 @@ function MessageRow(props: {
                     )}
                 </div>
                 {!msg.redacted && msg.previews?.map((p, i) => <LinkPreviewCard key={i} preview={p}/>)}
+                {confirmUnsend && msg.canUnsend && (
+                    <div className="confirm-unsend" role="alertdialog" aria-label="Unsend message">
+                        <span>Unsend for everyone?</span>
+                        <button className="danger" autoFocus onClick={() => {
+                            setConfirmUnsend(false);
+                            props.onUnsend();
+                        }}>Unsend</button>
+                        <button onClick={() => setConfirmUnsend(false)}>Cancel</button>
+                    </div>
+                )}
                 {msg.reactions?.length > 0 && (
                     <div className="reactions">
                         {msg.reactions.map(r => (
@@ -428,6 +523,12 @@ const MAX_SEEN_AVATARS = 5;
 // it, then (on your newest message only) Sent / Delivered.
 function MessageStatus(props: {msg: inbox.Message; isDm: boolean; isLatestMine: boolean}) {
     const {msg} = props;
+    if (msg.pending) {
+        return <div className="msg-status">{msg.pending === 'unsend' ? 'Unsending…' : 'Saving edit…'}</div>;
+    }
+    if (msg.changeFailed && !msg.redacted) {
+        return <div className="msg-status fail">{msg.changeFailed === 'unsend' ? 'Couldn\'t unsend' : 'Couldn\'t edit'}</div>;
+    }
     if (msg.isMe && (msg.status === 'pending' || msg.status === 'fail' || msg.status === 'retriable')) {
         return <div className={`msg-status ${msg.status}`}>{msg.status === 'pending' ? 'Sending…' : 'Failed to send'}</div>;
     }

@@ -425,6 +425,14 @@ button.viewer-nav.next { right: 14px; }
     padding: 0 6px; font-size: 12.5px;
 }
 .reaction.mine { border-color: var(--accent); }
+/* An edit or unsend waiting for the network. */
+.bubble.changing { opacity: 0.55; }
+.confirm-unsend {
+    display: flex; align-items: center; gap: 6px; margin: 4px 2px 0; font-size: 13px;
+    padding: 6px 6px 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg);
+}
+.confirm-unsend button { padding: 3px 10px; border-radius: 999px; font-size: 12.5px; }
+.confirm-unsend button.danger { background: var(--danger); color: #fff; border-color: transparent; }
 .msg-status { font-size: 11.5px; color: var(--fg-muted); margin: 2px 6px 0; }
 .msg-status.fail, .msg-status.retriable { color: var(--danger); }
 .history-loading {

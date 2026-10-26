@@ -16,6 +16,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"unified-inbox/internal/localmx"
 )
 
 func newPortal(t *testing.T, svc *Service, network string) (id.RoomID, func(body string, ts time.Time)) {
@@ -385,5 +387,58 @@ func TestLinkPreviews(t *testing.T) {
 		Image: "/media/pic", Width: 1200, Height: 630}}
 	if !slices.Equal(m.Previews, want) {
 		t.Fatalf("previews: %+v", m.Previews)
+	}
+}
+
+// A change the bridge can't make (here: no account signed in) comes back
+// as failed, leaving the message as it was. Your own messages can't be
+// changed in a chat that doesn't allow it, and others' never can.
+func TestEditRefused(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, send := newPortal(t, svc, "whatsapp")
+	send("from bob", time.Now())
+	mine := &event.Event{ID: "$mine", RoomID: roomID, Sender: Me, Type: event.EventMessage, Timestamp: time.Now().UnixMilli(),
+		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "helo"}}}
+	if err := svc.Store.HandleEvent(ctx, mine, false); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := svc.Messages(ctx, string(roomID), 0, 10)
+	if err != nil || len(msgs) != 2 {
+		t.Fatalf("messages: %+v, %v", msgs, err)
+	}
+	if msgs[0].CanEdit || msgs[0].CanUnsend || msgs[1].CanEdit {
+		t.Fatalf("nothing should be editable without a signed-in account: %+v", msgs)
+	}
+	if err = svc.EditMessage(ctx, string(roomID), string(msgs[0].EventID), "hi"); err == nil {
+		t.Fatal("editing someone else's message should fail")
+	}
+	if err = svc.EditMessage(ctx, string(roomID), "$mine", "hello"); err == nil {
+		t.Fatal("editing where the chat doesn't allow it should fail")
+	}
+
+	// Skip the checks to see what the bridge itself says.
+	err = svc.sendChange(ctx, string(roomID), "$mine", localmx.ChangeEdit, []byte(`{"msgtype":"m.text","body":"hello"}`),
+		event.EventMessage, &event.MessageEventContent{MsgType: event.MsgText, Body: "* hello",
+			NewContent: &event.MessageEventContent{MsgType: event.MsgText, Body: "hello"},
+			RelatesTo:  &event.RelatesTo{Type: event.RelReplace, EventID: "$mine"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		msgs, _ = svc.Messages(ctx, string(roomID), 0, 10)
+		if m := msgs[1]; m.Pending == "" {
+			if m.Body != "helo" || m.Edited || m.ChangeFailed != localmx.ChangeEdit {
+				t.Fatalf("refused edit should leave the message: %+v", m)
+			}
+			break
+		} else if m.Body != "hello" {
+			t.Fatalf("a pending edit should show its new text: %+v", m)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the bridge never answered the edit")
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

@@ -22,6 +22,10 @@ export function CheckForUpdates() {
   return window['go']['main']['App']['CheckForUpdates']();
 }
 
+export function EditMessage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['EditMessage'](arg1, arg2, arg3);
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
@@ -160,6 +164,10 @@ export function SubmitLogin(arg1, arg2) {
 
 export function Typing() {
   return window['go']['main']['App']['Typing']();
+}
+
+export function UnsendMessage(arg1, arg2) {
+  return window['go']['main']['App']['UnsendMessage'](arg1, arg2);
 }
 
 export function Version() {

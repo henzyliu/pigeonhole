@@ -229,6 +229,16 @@ func (a *App) PickAndSendFiles(roomID string) error {
 	return a.SendFiles(roomID, paths)
 }
 
+// EditMessage changes the text of one of your messages; UnsendMessage
+// removes one for everyone. Both wait for the network to confirm.
+func (a *App) EditMessage(roomID, eventID, text string) error {
+	return a.svc.EditMessage(a.ctx, roomID, eventID, text)
+}
+
+func (a *App) UnsendMessage(roomID, eventID string) error {
+	return a.svc.UnsendMessage(a.ctx, roomID, eventID)
+}
+
 func (a *App) React(roomID, eventID, key string) error {
 	return a.svc.React(a.ctx, roomID, eventID, key)
 }

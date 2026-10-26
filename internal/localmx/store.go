@@ -65,7 +65,13 @@ CREATE TABLE IF NOT EXISTS events (
 	ts       INTEGER NOT NULL,
 	status   TEXT NOT NULL DEFAULT '',
 	edited   INTEGER NOT NULL DEFAULT 0,
-	redacted INTEGER NOT NULL DEFAULT 0
+	redacted INTEGER NOT NULL DEFAULT 0,
+	-- An edit or unsend of this message that's waiting for the network to
+	-- confirm it (see changes.go), and the last one that failed.
+	pending_kind    TEXT NOT NULL DEFAULT '',
+	pending_id      TEXT NOT NULL DEFAULT '',
+	pending_content TEXT NOT NULL DEFAULT '',
+	change_failed   TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS events_room_ts ON events (room_id, ts);
 CREATE TABLE IF NOT EXISTS reactions (
@@ -139,6 +145,14 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 		if err = addColumn(db, "rooms", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
 			return nil, fmt.Errorf("failed to add drafts: %w", err)
 		}
+	}
+	for _, col := range []string{"pending_kind", "pending_id", "pending_content", "change_failed"} {
+		if err = addColumn(db, "events", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return nil, fmt.Errorf("failed to add message changes: %w", err)
+		}
+	}
+	if err = failLeftoverChanges(db); err != nil {
+		return nil, fmt.Errorf("failed to tidy unsent changes: %w", err)
 	}
 	if err = refreshEditedPreviews(db); err != nil {
 		return nil, fmt.Errorf("failed to fix chat previews: %w", err)
@@ -315,12 +329,7 @@ func (s *Store) HandleEvent(ctx context.Context, evt *event.Event, countUnread b
 		if red, ok := evt.Content.Parsed.(*event.RedactionEventContent); ok && red.Redacts != "" {
 			target = red.Redacts
 		}
-		if _, err = s.DB.ExecContext(ctx, "DELETE FROM reactions WHERE event_id=?", target); err == nil {
-			_, err = s.DB.ExecContext(ctx, "UPDATE events SET redacted=1, content='{}' WHERE event_id=?", target)
-		}
-		if err == nil {
-			err = refreshPreview(ctx, s.DB, target)
-		}
+		err = s.applyRedaction(ctx, target)
 	case event.EventReaction:
 		rel := evt.Content.AsReaction().RelatesTo
 		_, err = s.DB.ExecContext(ctx, `
@@ -334,11 +343,7 @@ func (s *Store) HandleEvent(ctx context.Context, evt *event.Event, countUnread b
 			hidden, _ := evt.Content.Raw["com.beeper.dont_render_edited"].(bool)
 			var newContent []byte
 			if newContent, err = json.Marshal(msg.NewContent); err == nil {
-				_, err = s.DB.ExecContext(ctx, "UPDATE events SET content=?, edited=MAX(edited, ?) WHERE event_id=?",
-					newContent, !hidden, msg.RelatesTo.EventID)
-			}
-			if err == nil {
-				err = refreshPreview(ctx, s.DB, msg.RelatesTo.EventID)
+				err = s.applyEdit(ctx, msg.RelatesTo.EventID, newContent, !hidden)
 			}
 			break
 		}
@@ -487,6 +492,9 @@ const (
 // SetEventStatus records a send status. A late "success" never downgrades a
 // message that's already been delivered.
 func (s *Store) SetEventStatus(ctx context.Context, eventID id.EventID, roomID id.RoomID, status string) {
+	if s.finishChange(ctx, eventID, status) {
+		return
+	}
 	_, err := s.DB.ExecContext(ctx, `
 		UPDATE events SET status=? WHERE event_id=? AND NOT (status=? AND ?=?)`,
 		status, eventID, StatusDelivered, status, StatusSuccess)

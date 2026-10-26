@@ -258,6 +258,10 @@ export namespace inbox {
 	    seenBy: Reader[];
 	    fetchable: string;
 	    previews: LinkPreview[];
+	    pending: string;
+	    changeFailed: string;
+	    canEdit: boolean;
+	    canUnsend: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -286,6 +290,10 @@ export namespace inbox {
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
 	        this.fetchable = source["fetchable"];
 	        this.previews = this.convertValues(source["previews"], LinkPreview);
+	        this.pending = source["pending"];
+	        this.changeFailed = source["changeFailed"];
+	        this.canEdit = source["canEdit"];
+	        this.canUnsend = source["canUnsend"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

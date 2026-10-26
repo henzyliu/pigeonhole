@@ -88,6 +88,14 @@ type Message struct {
 	Fetchable string `json:"fetchable"`
 	// Previews are the link previews the network sent with the message.
 	Previews []LinkPreview `json:"previews"`
+	// Pending is an edit or unsend of this message waiting for the network
+	// ("edit" or "unsend"); a pending edit's new text is already in Body.
+	// ChangeFailed is the last one the network refused.
+	Pending      string `json:"pending"`
+	ChangeFailed string `json:"changeFailed"`
+	// CanEdit and CanUnsend say whether your message can still be changed.
+	CanEdit   bool `json:"canEdit"`
+	CanUnsend bool `json:"canUnsend"`
 
 	senderID id.UserID
 }
@@ -306,7 +314,7 @@ func (s *Service) Messages(ctx context.Context, roomID string, beforeTS int64, l
 		return nil, err
 	}
 	rows, err := s.Store.DB.QueryContext(ctx, `
-		SELECT event_id, sender, type, content, ts, status, edited, redacted
+		SELECT event_id, sender, type, content, ts, status, edited, redacted, pending_kind, pending_content, change_failed
 		FROM events WHERE room_id=? AND ts<? ORDER BY ts DESC LIMIT ?`, roomID, beforeTS, limit)
 	if err != nil {
 		return nil, err
@@ -315,10 +323,14 @@ func (s *Service) Messages(ctx context.Context, roomID string, beforeTS int64, l
 	var msgs []Message
 	index := make(map[string]int)
 	for rows.Next() {
-		var sender, evtType, raw string
+		var sender, evtType, raw, pendingContent string
 		var m Message
-		if err = rows.Scan(&m.EventID, &sender, &evtType, &raw, &m.TS, &m.Status, &m.Edited, &m.Redacted); err != nil {
+		if err = rows.Scan(&m.EventID, &sender, &evtType, &raw, &m.TS, &m.Status, &m.Edited, &m.Redacted,
+			&m.Pending, &pendingContent, &m.ChangeFailed); err != nil {
 			return nil, err
+		}
+		if m.Pending == localmx.ChangeEdit {
+			raw = pendingContent
 		}
 		senderID := id.UserID(sender)
 		m.senderID = senderID
@@ -340,6 +352,7 @@ func (s *Service) Messages(ctx context.Context, roomID string, beforeTS int64, l
 	if err = s.attachReceipts(ctx, roomID, msgs, profiles); err != nil {
 		return nil, err
 	}
+	s.attachChangeLimits(ctx, roomID, msgs)
 	// Oldest first, which is how the thread view renders.
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
 		msgs[i], msgs[j] = msgs[j], msgs[i]
