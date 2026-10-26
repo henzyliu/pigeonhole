@@ -227,6 +227,12 @@ func (a *App) ResolveMedia(roomID, eventID string) error {
 	return a.svc.ResolveMedia(a.ctx, roomID, eventID)
 }
 
+// SetDraft saves the unsent message typed in a chat (and the message it
+// replies to); empty text clears it.
+func (a *App) SetDraft(roomID, text, replyTo string) error {
+	return a.svc.SetDraft(a.ctx, roomID, text, replyTo)
+}
+
 // SetChatMuted mutes a chat in Pigeonhole only (no alerts, not counted in
 // the app's unread badge), or unmutes it.
 func (a *App) SetChatMuted(roomID string, muted bool) error {

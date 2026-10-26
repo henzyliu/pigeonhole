@@ -33,7 +33,9 @@ export default function ChatList(props: {
                             <span className="chat-time">{formatTime(chat.lastTs)}</span>
                         </div>
                         <div className="chat-row-bottom">
-                            <span className="chat-preview">{chat.lastFromMe && 'You: '}{plainPreview(chat.preview)}</span>
+                            {chat.draft && chat.roomId !== props.selected
+                                ? <span className="chat-preview"><span className="draft-label">Draft:</span> {chat.draft.replace(/\s+/g, ' ')}</span>
+                                : <span className="chat-preview">{chat.lastFromMe && 'You: '}{plainPreview(chat.preview)}</span>}
                             {chat.unread > 0
                                 ? <span className={`badge ${chat.muted || chat.mutedOnNetwork ? 'badge-muted' : ''}`}>{chat.unread > 99 ? '99+' : chat.unread}</span>
                                 : <LatestStatus chat={chat}/>}

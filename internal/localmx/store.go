@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS rooms (
 	hidden_ts   INTEGER NOT NULL DEFAULT 0,
 	-- local_muted is a mute set in Pigeonhole, kept apart from muted_until,
 	-- which bridges overwrite with the network's own mute state.
-	local_muted INTEGER NOT NULL DEFAULT 0
+	local_muted INTEGER NOT NULL DEFAULT 0,
+	-- draft is an unsent message typed in Pigeonhole, and draft_reply the
+	-- event it replies to, if any.
+	draft       TEXT NOT NULL DEFAULT '',
+	draft_reply TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS members (
 	room_id    TEXT NOT NULL,
@@ -127,6 +131,11 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 	}
 	if err = addColumn(db, "rooms", "local_muted", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return nil, fmt.Errorf("failed to add muted chats: %w", err)
+	}
+	for _, col := range []string{"draft", "draft_reply"} {
+		if err = addColumn(db, "rooms", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return nil, fmt.Errorf("failed to add drafts: %w", err)
+		}
 	}
 	if err = refreshEditedPreviews(db); err != nil {
 		return nil, fmt.Errorf("failed to fix chat previews: %w", err)
@@ -529,6 +538,23 @@ func (s *Store) SetHidden(ctx context.Context, roomID id.RoomID, hidden bool) er
 // newer than when it was hidden. A new message raises last_ts past
 // hidden_ts, which brings the chat back without any extra bookkeeping.
 const HiddenClause = "(hidden_ts > 0 AND last_ts <= hidden_ts)"
+
+// SetDraft saves a chat's unsent message (and the event it replies to);
+// empty text clears it. Only an actual change tells the UI.
+func (s *Store) SetDraft(ctx context.Context, roomID id.RoomID, text string, replyTo id.EventID) error {
+	if text == "" {
+		replyTo = ""
+	}
+	res, err := s.DB.ExecContext(ctx, "UPDATE rooms SET draft=?, draft_reply=? WHERE room_id=? AND (draft<>? OR draft_reply<>?)",
+		text, replyTo, roomID, text, replyTo)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		s.notify("rooms", roomID)
+	}
+	return nil
+}
 
 // SetLocalMuted mutes a chat in Pigeonhole only, or unmutes it.
 func (s *Store) SetLocalMuted(ctx context.Context, roomID id.RoomID, muted bool) error {

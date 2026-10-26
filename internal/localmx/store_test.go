@@ -264,3 +264,40 @@ func TestPreviewFollowsEditsAndDeletions(t *testing.T) {
 		t.Fatalf("expected the stale preview to be repaired, got %q", p)
 	}
 }
+
+// Drafts are saved per chat, clearing the text clears the reply too, and
+// saving the same draft again doesn't notify.
+func TestDrafts(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(t.TempDir(), "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if err = store.CreateRoom(ctx, "!a:local", "messenger", true, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	notified := 0
+	store.Notify = func(Change) { notified++ }
+	get := func() (text, reply string) {
+		t.Helper()
+		if err := store.DB.QueryRow("SELECT draft, draft_reply FROM rooms WHERE room_id='!a:local'").Scan(&text, &reply); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if err = store.SetDraft(ctx, "!a:local", "see you at", "$q"); err != nil {
+		t.Fatal(err)
+	}
+	if text, reply := get(); text != "see you at" || reply != "$q" || notified != 1 {
+		t.Fatalf("draft %q reply %q, %d notifications", text, reply, notified)
+	}
+	_ = store.SetDraft(ctx, "!a:local", "see you at", "$q")
+	if notified != 1 {
+		t.Fatalf("an unchanged draft shouldn't notify (%d)", notified)
+	}
+	_ = store.SetDraft(ctx, "!a:local", "", "$q")
+	if text, reply := get(); text != "" || reply != "" || notified != 2 {
+		t.Fatalf("clearing: draft %q reply %q, %d notifications", text, reply, notified)
+	}
+}

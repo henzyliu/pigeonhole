@@ -47,6 +47,10 @@ type Chat struct {
 	// toward the app's unread badge.
 	Muted          bool `json:"muted"`
 	MutedOnNetwork bool `json:"mutedOnNetwork"`
+	// Draft is the unsent message typed in this chat, and DraftReply the
+	// message it replies to; both stay on this computer.
+	Draft      string `json:"draft"`
+	DraftReply string `json:"draftReply"`
 }
 
 type Reaction struct {
@@ -148,7 +152,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 	}
 	rows, err := s.Store.DB.QueryContext(ctx, `
 		SELECT room_id, network, name, avatar, preview, last_ts, unread, is_dm, `+localmx.HiddenClause+`,
-			local_muted, `+localmx.NetworkMutedClause+`
+			local_muted, `+localmx.NetworkMutedClause+`, draft, draft_reply
 		FROM rooms WHERE is_portal=1 ORDER BY last_ts DESC`)
 	if err != nil {
 		return nil, err
@@ -158,7 +162,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		var c Chat
 		var avatar string
 		if err = rows.Scan(&c.RoomID, &c.Network, &c.Name, &avatar, &c.Preview, &c.LastTS, &c.Unread, &c.IsDM, &c.Hidden,
-			&c.Muted, &c.MutedOnNetwork); err != nil {
+			&c.Muted, &c.MutedOnNetwork, &c.Draft, &c.DraftReply); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -626,6 +630,11 @@ func (s *Service) UnreadChats(ctx context.Context) (int, error) {
 		"SELECT COUNT(*) FROM rooms WHERE is_portal=1 AND unread>0 AND NOT "+localmx.HiddenClause+
 			" AND NOT "+localmx.MutedClause).Scan(&n)
 	return n, err
+}
+
+// SetDraft saves the unsent message in a chat; empty text clears it.
+func (s *Service) SetDraft(ctx context.Context, roomID, text, replyTo string) error {
+	return s.Store.SetDraft(ctx, id.RoomID(roomID), text, id.EventID(replyTo))
 }
 
 // SetMuted mutes a chat in Pigeonhole only (nothing changes on the

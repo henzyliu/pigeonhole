@@ -346,3 +346,28 @@ func TestMutedChat(t *testing.T) {
 		t.Fatal("unmuted chat should alert")
 	}
 }
+
+// A chat's draft comes back with the chat list, and sending clears it in
+// the UI by saving it empty.
+func TestDraft(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, send := newPortal(t, svc, "whatsapp")
+	send("lunch?", time.Now())
+	if err := svc.SetDraft(ctx, string(roomID), "sure, where", "$asked"); err != nil {
+		t.Fatal(err)
+	}
+	chats, err := svc.Chats(ctx)
+	if err != nil || len(chats) != 1 {
+		t.Fatalf("chats: %+v, %v", chats, err)
+	}
+	if c := chats[0]; c.Draft != "sure, where" || c.DraftReply != "$asked" || c.Preview != "lunch?" {
+		t.Fatalf("expected the draft alongside the preview: %+v", c)
+	}
+	if err = svc.SetDraft(ctx, string(roomID), "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if chats, _ = svc.Chats(ctx); chats[0].Draft != "" || chats[0].DraftReply != "" {
+		t.Fatalf("draft should be cleared: %+v", chats[0])
+	}
+}

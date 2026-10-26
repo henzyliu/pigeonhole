@@ -11,8 +11,11 @@ const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👍'];
 export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidden: (hidden: boolean) => Promise<void>}) {
     const {chat} = props;
     const [messages, setMessages] = useState<inbox.Message[]>([]);
-    const [draft, setDraft] = useState('');
+    // The message being typed starts from the chat's saved draft.
+    const [draft, setDraft] = useState(chat.draft ?? '');
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
+    // The draft's reply, until that message has loaded and can be shown.
+    const pendingReply = useRef(chat.draftReply ?? '');
     const [error, setError] = useState('');
     const [hasMore, setHasMore] = useState(true);
     // The photo or video open in the full-window viewer, by event ID.
@@ -63,6 +66,37 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         return () => window.clearTimeout(timer);
     }, [refresh, props.tick, chat.roomId]);
 
+    // Restore the draft's reply once its message is loaded.
+    useEffect(() => {
+        if (!pendingReply.current || messages.length === 0) return;
+        const msg = messages.find(m => m.eventId === pendingReply.current);
+        if (msg) {
+            pendingReply.current = '';
+            setReplyTo(r => r ?? msg);
+        }
+    }, [messages]);
+
+    // Save the draft shortly after typing stops, and straight away when
+    // leaving the chat, so it's there next time (even after quitting).
+    const saved = useRef({text: chat.draft ?? '', reply: chat.draftReply ?? ''});
+    const unsaved = useRef<{text: string; reply: string} | null>(null);
+    const saveDraft = useCallback(() => {
+        const next = unsaved.current;
+        unsaved.current = null;
+        if (!next || (next.text === saved.current.text && next.reply === saved.current.reply)) return;
+        saved.current = next;
+        Go.SetDraft(chat.roomId, next.text, next.reply).catch(console.error);
+    }, [chat.roomId]);
+    useEffect(() => {
+        const text = draft.trim() ? draft : '';
+        // A reply still waiting to load stays part of the draft.
+        const reply = text ? (replyTo?.eventId ?? pendingReply.current) : '';
+        unsaved.current = {text, reply};
+        const timer = window.setTimeout(saveDraft, 400);
+        return () => window.clearTimeout(timer);
+    }, [draft, replyTo, saveDraft]);
+    useEffect(() => saveDraft, [saveDraft]);
+
     // Files dropped anywhere on the window go to the open conversation.
     useEffect(() => {
         OnFileDrop((_x, _y, paths) => {
@@ -111,6 +145,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
         const text = draft.trim();
         if (!text) return;
         setDraft('');
+        pendingReply.current = '';
         setError('');
         stickToBottom.current = true;
         try {
@@ -188,7 +223,7 @@ export default function Thread(props: {chat: inbox.Chat; tick: number; onSetHidd
                         <div className="reply-label">Replying to {replyTo.isMe ? 'yourself' : replyTo.senderName}</div>
                         <div className="reply-snippet">{snippet(replyTo)}</div>
                     </div>
-                    <button className="icon-button" onClick={() => setReplyTo(null)}>✕</button>
+                    <button className="icon-button" onClick={() => { pendingReply.current = ''; setReplyTo(null); }}>✕</button>
                 </div>
             )}
             <div className="composer">

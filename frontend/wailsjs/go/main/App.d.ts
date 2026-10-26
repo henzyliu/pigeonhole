@@ -59,6 +59,8 @@ export function SetChatHidden(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetChatMuted(arg1:string,arg2:boolean):Promise<void>;
 
+export function SetDraft(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SetHideMessageText(arg1:boolean):Promise<void>;
 
 export function SetNotifications(arg1:boolean):Promise<void>;

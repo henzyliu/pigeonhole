@@ -55,6 +55,8 @@ export namespace inbox {
 	    historyLoading: boolean;
 	    muted: boolean;
 	    mutedOnNetwork: boolean;
+	    draft: string;
+	    draftReply: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -78,6 +80,8 @@ export namespace inbox {
 	        this.historyLoading = source["historyLoading"];
 	        this.muted = source["muted"];
 	        this.mutedOnNetwork = source["mutedOnNetwork"];
+	        this.draft = source["draft"];
+	        this.draftReply = source["draftReply"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
