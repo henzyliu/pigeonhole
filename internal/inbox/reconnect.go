@@ -2,7 +2,10 @@ package inbox
 
 import (
 	"context"
+	"strings"
 	"time"
+
+	"maunium.net/go/mautrix/bridgev2/status"
 )
 
 // Connections can look alive after the computer sleeps while really being
@@ -29,6 +32,13 @@ func (s *Service) Reconnect(reason string) bool {
 		if !n.started.Load() {
 			continue
 		}
+		// After a wake, a network that has already reconnected by itself is
+		// left alone: resetting it again only opens a moment in which
+		// anything sent fails.
+		if reason == "wake" && s.justConnected(netID) {
+			s.Log.Debug().Str("network", n.Name).Msg("Already reconnected, not resetting")
+			continue
+		}
 		go func() {
 			// A bridge that trips over an account in an odd state (e.g. signed
 			// out) mustn't take the app down with it.
@@ -42,6 +52,28 @@ func (s *Service) Reconnect(reason string) bool {
 	}
 	s.emit("inbox:accounts", nil)
 	return true
+}
+
+// justConnectedWindow is how recently a network must have reconnected for
+// a wake-up to leave it alone.
+const justConnectedWindow = 30 * time.Second
+
+// justConnected reports whether every account on a network has reported
+// connecting within justConnectedWindow.
+func (s *Service) justConnected(netID string) bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	any := false
+	for key, state := range s.states {
+		if !strings.HasPrefix(key, netID+"/") {
+			continue
+		}
+		any = true
+		if state.StateEvent != status.StateConnected || time.Since(s.connectedAt[key]) > justConnectedWindow {
+			return false
+		}
+	}
+	return any
 }
 
 // wakeCheckInterval is how often the wake watcher looks at the clock.

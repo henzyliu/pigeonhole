@@ -116,6 +116,9 @@ type Store struct {
 	// OnIncoming is called for each new message from someone else that counts
 	// towards the unread total (i.e. not history backfill).
 	OnIncoming func(roomID id.RoomID, sender id.UserID, ts int64, preview string)
+	// OnRetriableFailure is called when sending a message failed in a way
+	// worth trying again (e.g. the account was reconnecting).
+	OnRetriableFailure func(eventID id.EventID, roomID id.RoomID)
 
 	lock sync.Mutex
 
@@ -485,12 +488,20 @@ func refreshEditedPreviews(db *sql.DB) error {
 	return rows.Err()
 }
 
-// Message statuses, as stored in events.status. "pending", "fail" and
-// "retriable" come straight from the bridge's message status too.
+// Message statuses, as stored in events.status: the bridge's message status
+// in lower case, plus "delivered".
 const (
-	StatusSuccess   = "success"
-	StatusDelivered = "delivered"
+	StatusPending       = "pending"
+	StatusSuccess       = "success"
+	StatusDelivered     = "delivered"
+	StatusFailRetriable = "fail_retriable" // e.g. the account was reconnecting
+	StatusFailPermanent = "fail_permanent"
 )
+
+// SendFailed reports whether a status means the message wasn't sent.
+func SendFailed(status string) bool {
+	return status == StatusFailRetriable || status == StatusFailPermanent
+}
 
 // SetEventStatus records a send status. A late "success" never downgrades a
 // message that's already been delivered.
@@ -498,12 +509,27 @@ func (s *Store) SetEventStatus(ctx context.Context, eventID id.EventID, roomID i
 	if s.finishChange(ctx, eventID, status) {
 		return
 	}
-	_, err := s.DB.ExecContext(ctx, `
+	res, err := s.DB.ExecContext(ctx, `
 		UPDATE events SET status=? WHERE event_id=? AND NOT (status=? AND ?=?)`,
 		status, eventID, StatusDelivered, status, StatusSuccess)
+	if err != nil {
+		return
+	}
+	s.notify("messages", roomID)
+	if n, _ := res.RowsAffected(); n > 0 && status == StatusFailRetriable && s.OnRetriableFailure != nil {
+		s.OnRetriableFailure(eventID, roomID)
+	}
+}
+
+// DeleteFailedMessage removes a message that never sent, once it has been
+// sent again as a new one.
+func (s *Store) DeleteFailedMessage(ctx context.Context, eventID id.EventID, roomID id.RoomID) error {
+	_, err := s.DB.ExecContext(ctx, "DELETE FROM events WHERE event_id=? AND status IN (?, ?)",
+		eventID, StatusFailRetriable, StatusFailPermanent)
 	if err == nil {
 		s.notify("messages", roomID)
 	}
+	return err
 }
 
 func (s *Store) MarkRead(ctx context.Context, roomID id.RoomID) error {

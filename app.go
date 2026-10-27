@@ -260,6 +260,11 @@ func (a *App) UnsendMessage(roomID, eventID string) error {
 	return a.svc.UnsendMessage(a.ctx, roomID, eventID)
 }
 
+// RetrySend sends a message that failed again (the Try again button).
+func (a *App) RetrySend(roomID, eventID string) error {
+	return a.svc.RetrySend(a.ctx, roomID, eventID)
+}
+
 func (a *App) React(roomID, eventID, key string) error {
 	return a.svc.React(a.ctx, roomID, eventID, key)
 }

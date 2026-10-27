@@ -664,9 +664,15 @@ func (s *Service) roomNetwork(ctx context.Context, roomID string) (*Network, err
 // sendLocal stores an event authored in the UI and hands it to the bridge,
 // exactly as a Matrix homeserver would forward it to an appservice.
 func (s *Service) sendLocal(ctx context.Context, roomID string, evtType event.Type, content any) error {
+	_, err := s.sendLocalID(ctx, roomID, evtType, content)
+	return err
+}
+
+// sendLocalID is sendLocal, also giving the new event's ID.
+func (s *Service) sendLocalID(ctx context.Context, roomID string, evtType event.Type, content any) (id.EventID, error) {
 	n, err := s.roomNetwork(ctx, roomID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	evt := &event.Event{
 		ID:        localmx.NewEventID(),
@@ -677,13 +683,13 @@ func (s *Service) sendLocal(ctx context.Context, roomID string, evtType event.Ty
 		Content:   event.Content{Parsed: content},
 	}
 	if err = s.Store.HandleEvent(ctx, evt, false); err != nil {
-		return err
+		return "", err
 	}
-	if evtType == event.EventMessage {
-		s.Store.SetEventStatus(ctx, evt.ID, evt.RoomID, "pending")
+	if evtType == event.EventMessage || evtType == event.EventSticker {
+		s.Store.SetEventStatus(ctx, evt.ID, evt.RoomID, localmx.StatusPending)
 	}
 	go n.Bridge.QueueMatrixEvent(n.Bridge.BackgroundCtx, evt)
-	return nil
+	return evt.ID, nil
 }
 
 func (s *Service) SendText(ctx context.Context, roomID, text, replyTo string) error {

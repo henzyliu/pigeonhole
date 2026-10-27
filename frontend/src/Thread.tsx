@@ -308,6 +308,7 @@ export default function Thread(props: {
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => startReply(m)} onReact={key => react(m, key)}
                                         onEdit={() => startEdit(m)} onUnsend={() => unsend(m)}
+                                        onRetry={() => Go.RetrySend(chat.roomId, m.eventId).catch(e => setError(errorText(e)))}
                                         onOpenMedia={() => setViewing(m.eventId)}
                                         onFetch={() => Go.ResolveMedia(chat.roomId, m.eventId)}/>
                         </Fragment>
@@ -394,6 +395,7 @@ function MessageRow(props: {
     onReact: (key: string) => void;
     onEdit: () => void;
     onUnsend: () => void;
+    onRetry: () => Promise<void>;
     onOpenMedia: () => void;
     onFetch: () => Promise<void>;
 }) {
@@ -519,7 +521,7 @@ function MessageRow(props: {
                         ))}
                     </div>
                 )}
-                <MessageStatus msg={msg} isDm={!props.showSender} isLatestMine={props.isLatestMine}/>
+                <MessageStatus msg={msg} isDm={!props.showSender} isLatestMine={props.isLatestMine} onRetry={props.onRetry}/>
             </div>
         </div>
     );
@@ -550,16 +552,29 @@ const MAX_SEEN_AVATARS = 5;
 
 // What shows under a message, in priority order: a send problem, who has seen
 // it, then (on your newest message only) Sent / Delivered.
-function MessageStatus(props: {msg: inbox.Message; isDm: boolean; isLatestMine: boolean}) {
+function MessageStatus(props: {msg: inbox.Message; isDm: boolean; isLatestMine: boolean; onRetry: () => Promise<void>}) {
     const {msg} = props;
+    const [retrying, setRetrying] = useState(false);
     if (msg.pending) {
         return <div className="msg-status">{msg.pending === 'unsend' ? 'Unsending…' : 'Saving edit…'}</div>;
     }
     if (msg.changeFailed && !msg.redacted) {
         return <div className="msg-status fail">{msg.changeFailed === 'unsend' ? 'Couldn\'t unsend' : 'Couldn\'t edit'}</div>;
     }
-    if (msg.isMe && (msg.status === 'pending' || msg.status === 'fail' || msg.status === 'retriable')) {
-        return <div className={`msg-status ${msg.status}`}>{msg.status === 'pending' ? 'Sending…' : 'Failed to send'}</div>;
+    if (msg.isMe && msg.status === 'pending') {
+        return <div className="msg-status">Sending…</div>;
+    }
+    // The bridge reports fail_retriable or fail_permanent.
+    if (msg.isMe && msg.status.startsWith('fail')) {
+        return (
+            <div className="msg-status fail">
+                Failed to send ·{' '}
+                <button className="link retry-send" disabled={retrying} onClick={() => {
+                    setRetrying(true);
+                    props.onRetry().finally(() => setRetrying(false));
+                }}>{retrying ? 'Sending…' : 'Try again'}</button>
+            </div>
+        );
     }
     if (msg.seenBy?.length) {
         return <SeenBy readers={msg.seenBy} isDm={props.isDm} isMe={msg.isMe}/>;

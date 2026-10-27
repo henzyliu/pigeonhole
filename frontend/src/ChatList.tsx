@@ -153,8 +153,8 @@ function LatestStatus({chat}: {chat: inbox.Chat}) {
     switch (chat.lastStatus) {
         case 'pending':
             return null;
-        case 'fail':
-        case 'retriable':
+        case 'fail_retriable':
+        case 'fail_permanent':
             return <span className="list-status tick failed" title="Failed to send">!</span>;
         case 'delivered':
             return <span className="list-status tick delivered" title="Delivered"><Check/></span>;

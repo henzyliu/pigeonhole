@@ -80,6 +80,11 @@ type Service struct {
 	// out, until they connect again, so a reconnect attempt that briefly
 	// goes through "connecting" doesn't alert twice.
 	signedOutAlerted map[string]bool
+	// connectedAt is when each account last reported connecting, so a
+	// wake-up doesn't reset a network that has just reconnected by itself.
+	connectedAt map[string]time.Time
+	// autoRetried holds failed messages already retried automatically.
+	autoRetried map[id.EventID]bool
 }
 
 func New(dataDir string, log zerolog.Logger) (*Service, error) {
@@ -97,6 +102,7 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 	store.IsSelf = s.isSelf
 	store.Notify = func(change localmx.Change) { s.emit("inbox:change", change) }
 	store.OnIncoming = s.onIncoming
+	store.OnRetriableFailure = s.onRetriableFailure
 
 	fb := &connector.MetaConnector{}
 	if err = loadConfig(connector.ExampleConfig, &fb.Config); err != nil {
@@ -379,6 +385,10 @@ func (s *Service) onBridgeState(network string, state status.BridgeState) {
 	switch {
 	case state.StateEvent == status.StateConnected:
 		delete(s.signedOutAlerted, key)
+		if s.connectedAt == nil {
+			s.connectedAt = make(map[string]time.Time)
+		}
+		s.connectedAt[key] = time.Now()
 	case needsLogin(state) && !s.signedOutAlerted[key]:
 		if s.signedOutAlerted == nil {
 			s.signedOutAlerted = make(map[string]bool)

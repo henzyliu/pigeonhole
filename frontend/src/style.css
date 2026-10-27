@@ -680,3 +680,4 @@ kbd {
 .welcome-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
 .welcome-dots span.on { background: var(--accent); }
 @media (max-width: 480px) { .welcome-networks { grid-template-columns: 1fr; } .welcome-card { padding: 24px 18px 18px; } }
+.msg-status button.retry-send { font-size: inherit; padding: 0; color: inherit; text-decoration: underline; }

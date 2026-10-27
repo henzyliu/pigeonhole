@@ -54,6 +54,8 @@ export function Refresh():Promise<boolean>;
 
 export function ResolveMedia(arg1:string,arg2:string):Promise<void>;
 
+export function RetrySend(arg1:string,arg2:string):Promise<void>;
+
 export function SaveMedia(arg1:string,arg2:string):Promise<void>;
 
 export function SearchGIFs(arg1:string,arg2:number):Promise<Array<gifs.GIF>>;

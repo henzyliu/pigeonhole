@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -455,5 +456,64 @@ func TestPlayableMime(t *testing.T) {
 		if got := playableMime(in); got != want {
 			t.Errorf("playableMime(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A failed message of yours can be sent again: Try again sends it as a new
+// message and removes the failed one, and one that failed in a retriable
+// way (e.g. sent while reconnecting) is retried once by itself.
+func TestRetrySend(t *testing.T) {
+	autoRetryDelay = 100 * time.Millisecond
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, send := newPortal(t, svc, "whatsapp")
+	send("from bob", time.Now())
+	failed := func(evtID id.EventID, body string, status string) {
+		t.Helper()
+		evt := &event.Event{ID: evtID, RoomID: roomID, Sender: Me, Type: event.EventMessage, Timestamp: time.Now().UnixMilli(),
+			Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: body}}}
+		if err := svc.Store.HandleEvent(ctx, evt, false); err != nil {
+			t.Fatal(err)
+		}
+		svc.Store.SetEventStatus(ctx, evtID, roomID, status)
+	}
+	mine := func() (out []string) {
+		msgs, _ := svc.Messages(ctx, string(roomID), 0, 20)
+		for _, m := range msgs {
+			if m.IsMe {
+				out = append(out, m.EventID+"="+m.Body)
+			}
+		}
+		return
+	}
+	has := func(match func(string) bool) bool { return slices.ContainsFunc(mine(), match) }
+	withID := func(evtID string) func(string) bool {
+		return func(b string) bool { return strings.HasPrefix(b, evtID+"=") }
+	}
+	withBody := func(body string) func(string) bool {
+		return func(b string) bool { return strings.HasSuffix(b, "="+body) }
+	}
+
+	failed("$perm", "nice", localmx.StatusFailPermanent)
+	if err := svc.RetrySend(ctx, string(roomID), "$perm"); err != nil {
+		t.Fatal(err)
+	}
+	if has(withID("$perm")) || !has(withBody("nice")) {
+		t.Fatalf("Try again should replace the failed message: %v", mine())
+	}
+	if err := svc.RetrySend(ctx, string(roomID), "$perm"); err == nil {
+		t.Fatal("a message that's gone can't be retried")
+	}
+
+	failed("$retry", "noice", localmx.StatusFailRetriable)
+	deadline := time.Now().Add(5 * time.Second)
+	for has(withID("$retry")) {
+		if time.Now().After(deadline) {
+			t.Fatalf("a retriable failure should be retried by itself: %v", mine())
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !has(withBody("noice")) {
+		t.Fatalf("the retried message should be there: %v", mine())
 	}
 }

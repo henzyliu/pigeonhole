@@ -102,6 +102,10 @@ export function ResolveMedia(arg1, arg2) {
   return window['go']['main']['App']['ResolveMedia'](arg1, arg2);
 }
 
+export function RetrySend(arg1, arg2) {
+  return window['go']['main']['App']['RetrySend'](arg1, arg2);
+}
+
 export function SaveMedia(arg1, arg2) {
   return window['go']['main']['App']['SaveMedia'](arg1, arg2);
 }
