@@ -3,6 +3,7 @@ import {EventsOn, Go, inbox, NETWORK_LABELS} from './api';
 import {isMod, MOD, ShortcutsHelp} from './shortcuts';
 import ChatList from './ChatList';
 import Thread from './Thread';
+import Welcome from './Welcome';
 import Accounts from './Accounts';
 import NewChat from './NewChat';
 import Settings from './Settings';
@@ -48,6 +49,15 @@ export default function App() {
         window.setTimeout(() => setRefreshing(false), 1500);
     }, []);
     const [showShortcuts, setShowShortcuts] = useState(false);
+    // The first-run welcome, for someone with no chats yet.
+    const [showWelcome, setShowWelcome] = useState(false);
+    useEffect(() => {
+        Go.ShowWelcome().then(setShowWelcome).catch(console.error);
+    }, []);
+    const finishWelcome = useCallback(() => {
+        setShowWelcome(false);
+        Go.FinishWelcome().catch(console.error);
+    }, []);
     const searchRef = useRef<HTMLInputElement>(null);
     // The chats as listed, for moving through them from the keyboard.
     const visibleRef = useRef<inbox.Chat[]>([]);
@@ -63,7 +73,7 @@ export default function App() {
     selectedRef.current = selected;
     const [showNewChat, setShowNewChat] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
-    const dialogOpen = showNewChat || showSettings || showAccounts || showShortcuts;
+    const dialogOpen = showNewChat || showSettings || showAccounts || showShortcuts || showWelcome;
     const dialogOpenRef = useRef(dialogOpen);
     dialogOpenRef.current = dialogOpen;
 
@@ -439,10 +449,6 @@ export default function App() {
                             <button className="primary" onClick={() => setShowAccounts(true)}>Connect an account</button>}
                     </div>}
             </main>
-            {showAccounts && <Accounts key={signInNetwork} accounts={accounts} signIn={signInNetwork} onClose={() => {
-                setShowAccounts(false);
-                setSignInNetwork('');
-            }}/>}
             {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
             {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}
                                        onShowShortcuts={() => {
@@ -450,6 +456,11 @@ export default function App() {
                                            setShowShortcuts(true);
                                        }}/>}
             {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)}/>}
+            {showWelcome && <Welcome accounts={accounts} onConnect={openSignIn} onFinish={finishWelcome}/>}
+            {showAccounts && <Accounts key={signInNetwork} accounts={accounts} signIn={signInNetwork} onClose={() => {
+                setShowAccounts(false);
+                setSignInNetwork('');
+            }}/>}
         </div>
     );
 }

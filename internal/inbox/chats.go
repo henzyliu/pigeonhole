@@ -775,3 +775,10 @@ func (s *Service) MarkRead(ctx context.Context, roomID string) error {
 	go n.Bridge.QueueMatrixEvent(n.Bridge.BackgroundCtx, receipt)
 	return nil
 }
+
+// HasChats reports whether any chat has ever been stored.
+func (s *Service) HasChats(ctx context.Context) bool {
+	var any bool
+	_ = s.Store.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM rooms WHERE is_portal=1)").Scan(&any)
+	return any
+}

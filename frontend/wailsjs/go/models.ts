@@ -392,6 +392,7 @@ export namespace main {
 	    mutedAccounts?: string[];
 	    updateNotified?: string;
 	    backgroundNoticeShown: boolean;
+	    welcomeDone: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -405,6 +406,7 @@ export namespace main {
 	        this.mutedAccounts = source["mutedAccounts"];
 	        this.updateNotified = source["updateNotified"];
 	        this.backgroundNoticeShown = source["backgroundNoticeShown"];
+	        this.welcomeDone = source["welcomeDone"];
 	    }
 	}
 	export class StartAtLogin {

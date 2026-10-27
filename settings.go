@@ -36,6 +36,9 @@ type Settings struct {
 	// BackgroundNoticeShown records that the "still running" notice has
 	// been shown, after the window was first closed.
 	BackgroundNoticeShown bool `json:"backgroundNoticeShown"`
+	// WelcomeDone records that the first-run welcome was finished (or
+	// skipped), so it isn't shown again.
+	WelcomeDone bool `json:"welcomeDone"`
 }
 
 func settingsPath(dir string) string { return filepath.Join(dir, "settings.json") }
@@ -161,6 +164,18 @@ func (a *App) SetAccountNotifications(network, loginID string, on bool) error {
 }
 
 // SetHideMessageText chooses whether alerts show the message text.
+// ShowWelcome reports whether to show the first-run welcome: it hasn't
+// been finished, and there are no chats yet (so people who used Pigeonhole
+// before it had a welcome don't get one).
+func (a *App) ShowWelcome() bool {
+	return !a.GetSettings().WelcomeDone && !a.svc.HasChats(a.ctx)
+}
+
+// FinishWelcome stops the welcome from showing again.
+func (a *App) FinishWelcome() error {
+	return a.updateSettings(func(s *Settings) { s.WelcomeDone = true })
+}
+
 func (a *App) SetHideMessageText(hide bool) error {
 	return a.updateSettings(func(s *Settings) { s.HideMessageText = hide })
 }

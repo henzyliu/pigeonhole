@@ -16,6 +16,8 @@ export function CheckForUpdates():Promise<main.UpdateStatus>;
 
 export function EditMessage(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function FinishWelcome():Promise<void>;
+
 export function GIFsEnabled():Promise<boolean>;
 
 export function GetSettings():Promise<main.Settings>;
@@ -83,6 +85,8 @@ export function SetStartAtLogin(arg1:boolean):Promise<void>;
 export function SetTheme(arg1:string):Promise<void>;
 
 export function SetView(arg1:string,arg2:boolean):Promise<void>;
+
+export function ShowWelcome():Promise<boolean>;
 
 export function StartAtLogin():Promise<main.StartAtLogin>;
 
