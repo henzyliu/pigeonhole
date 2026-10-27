@@ -454,6 +454,10 @@ export default function App() {
                                        onShowShortcuts={() => {
                                            setShowSettings(false);
                                            setShowShortcuts(true);
+                                       }}
+                                       onShowWelcome={() => {
+                                           setShowSettings(false);
+                                           setShowWelcome(true);
                                        }}/>}
             {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)}/>}
             {showWelcome && <Welcome accounts={accounts} onConnect={openSignIn} onFinish={finishWelcome}/>}

@@ -645,7 +645,8 @@ kbd {
     font: inherit; font-size: 12px; padding: 2px 7px; border-radius: 6px;
     border: 1px solid var(--border); border-bottom-width: 2px; background: var(--bg-side); white-space: nowrap;
 }
-.shortcuts-link { align-self: flex-start; margin: -6px 0 6px; font-size: 13px; }
+.settings-links { display: flex; gap: 16px; margin: -6px 0 6px; }
+.settings-links button.link { font-size: 13px; }
 
 /* The first-run welcome, over the whole window. */
 .welcome {

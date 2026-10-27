@@ -2,7 +2,7 @@ import {useState} from 'react';
 import {inbox, NETWORK_LABELS} from './api';
 import icon from './assets/pigeonhole.png';
 import NetworkIcon from './NetworkIcon';
-import {IS_MAC, MOD} from './shortcuts';
+import {IS_MAC, MOD, useCloseOnEscape} from './shortcuts';
 
 const NETWORKS = ['messenger', 'instagram', 'whatsapp', 'discord'];
 
@@ -14,6 +14,8 @@ export default function Welcome(props: {
     onFinish: () => void;
 }) {
     const [step, setStep] = useState(0);
+    // Escape leaves it, as finishing does.
+    useCloseOnEscape(props.onFinish);
     const connected = (network: string) => props.accounts.some(a => a.network === network && !a.needsLogin);
     const anyConnected = NETWORKS.some(connected);
 

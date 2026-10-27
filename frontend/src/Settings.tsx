@@ -12,7 +12,7 @@ const THEMES: {id: Theme; label: string}[] = [
     {id: 'dark', label: 'Dark'},
 ];
 
-export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void}) {
+export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void; onShowWelcome: () => void}) {
     useCloseOnEscape(props.onClose);
     const [error, setError] = useState('');
     const [version, setVersion] = useState<main.VersionInfo | null>(null);
@@ -92,7 +92,10 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                     <h2>Settings</h2>
                     <button className="icon-button" onClick={props.onClose}>✕</button>
                 </div>
-                <button className="link shortcuts-link" onClick={props.onShowShortcuts}>Keyboard shortcuts ({MOD}/)</button>
+                <div className="settings-links">
+                    <button className="link" onClick={props.onShowShortcuts}>Keyboard shortcuts ({MOD}/)</button>
+                    <button className="link" onClick={props.onShowWelcome}>Welcome tour</button>
+                </div>
                 {error && <div className="banner error">{error}</div>}
                 <div className="setting">
                     <div>
