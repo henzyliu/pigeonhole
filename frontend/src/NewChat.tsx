@@ -1,10 +1,12 @@
 import {useEffect, useRef, useState} from 'react';
 import {errorText, Go, inbox} from './api';
 import Avatar from './Avatar';
+import {useCloseOnEscape} from './shortcuts';
 
 const SEARCH_DELAY_MS = 350;
 
 export default function NewChat(props: {onClose: () => void; onOpened: (roomId: string) => void}) {
+    useCloseOnEscape(props.onClose);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<inbox.Person[] | null>(null);
     const [searching, setSearching] = useState(false);

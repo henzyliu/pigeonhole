@@ -1,5 +1,6 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {EventsOn, Go, inbox, NETWORK_LABELS} from './api';
+import {isMod, MOD, ShortcutsHelp} from './shortcuts';
 import ChatList from './ChatList';
 import Thread from './Thread';
 import Accounts from './Accounts';
@@ -46,25 +47,69 @@ export default function App() {
         Go.Refresh().catch(console.error);
         window.setTimeout(() => setRefreshing(false), 1500);
     }, []);
-    // ⌘R / Ctrl+R refreshes instead of reloading the window.
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'r') {
-                e.preventDefault();
-                refresh();
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [refresh]);
+    const [showShortcuts, setShowShortcuts] = useState(false);
+    const searchRef = useRef<HTMLInputElement>(null);
+    // The chats as listed, for moving through them from the keyboard.
+    const visibleRef = useRef<inbox.Chat[]>([]);
+    // Which search result Enter opens, while typing in the search box.
+    const [searchIndex, setSearchIndex] = useState(0);
     // The network to sign in to again, when Accounts was opened for that.
     const [signInNetwork, setSignInNetwork] = useState('');
     const openSignIn = useCallback((network: string) => {
         setSignInNetwork(network);
         setShowAccounts(true);
     }, []);
+    const selectedRef = useRef(selected);
+    selectedRef.current = selected;
     const [showNewChat, setShowNewChat] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const dialogOpen = showNewChat || showSettings || showAccounts || showShortcuts;
+    const dialogOpenRef = useRef(dialogOpen);
+    dialogOpenRef.current = dialogOpen;
+
+    // Moves to the chat above or below the open one in the list; with
+    // unreadOnly, to the nearest one with unread messages.
+    const moveChat = useCallback((step: 1 | -1, unreadOnly: boolean) => {
+        const list = visibleRef.current;
+        let i = list.findIndex(c => c.roomId === selectedRef.current);
+        if (i < 0) i = step > 0 ? -1 : list.length;
+        for (let j = i + step; j >= 0 && j < list.length; j += step) {
+            if (!unreadOnly || list[j].unread > 0) {
+                setSelected(list[j].roomId);
+                return;
+            }
+        }
+    }, []);
+
+    // Keyboard shortcuts (see shortcuts.tsx). They use ⌘ on a Mac and Ctrl
+    // on Windows, and replace the webview's own (⌘R would reload it).
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (isMod(e) && !e.shiftKey) {
+                const key = e.key.toLowerCase();
+                const action = {
+                    r: refresh,
+                    k: () => {
+                        searchRef.current?.focus();
+                        searchRef.current?.select();
+                    },
+                    n: () => setShowNewChat(true),
+                    ',': () => setShowSettings(true),
+                    '/': () => setShowShortcuts(s => !s),
+                }[key];
+                if (action && (!dialogOpenRef.current || key === 'r' || key === '/')) {
+                    e.preventDefault();
+                    action();
+                }
+            } else if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                if (dialogOpenRef.current) return;
+                e.preventDefault();
+                moveChat(e.key === 'ArrowUp' ? -1 : 1, e.shiftKey);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [refresh, moveChat]);
     const [theme, setTheme] = useState<Theme>('system');
     const updateStatus = useUpdateStatus();
 
@@ -80,8 +125,6 @@ export default function App() {
     const [messageTick, setMessageTick] = useState(0);
     // Who is typing in each chat, by room ID.
     const [typing, setTyping] = useState<Record<string, string[]>>({});
-    const selectedRef = useRef(selected);
-    selectedRef.current = selected;
     const chatsRef = useRef(chats);
     chatsRef.current = chats;
 
@@ -228,6 +271,30 @@ export default function App() {
             return !q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q);
         });
     }, [chats, category, filter, query, showHidden]);
+    visibleRef.current = visibleChats;
+
+    // In the search box, ↑ ↓ pick a result and Enter opens it; Escape
+    // clears the search and leaves the box.
+    useEffect(() => setSearchIndex(0), [query]);
+    const highlighted = query.trim() ? visibleChats[Math.min(searchIndex, visibleChats.length - 1)]?.roomId : undefined;
+    const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const last = visibleChats.length - 1;
+            setSearchIndex(i => Math.max(0, Math.min(last, Math.min(i, last) + (e.key === 'ArrowDown' ? 1 : -1))));
+        } else if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+            const chat = visibleChats[Math.min(searchIndex, visibleChats.length - 1)];
+            if (chat) {
+                e.preventDefault();
+                showChat(chat.roomId, chats);
+                searchRef.current?.blur();
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setQuery('');
+            searchRef.current?.blur();
+        }
+    };
 
     const selectedChat = chats.find(c => c.roomId === selected);
     const totalUnread = showHidden ? chats.filter(c => c.hidden && c.unread > 0).length : categoryStats[category].unread;
@@ -286,10 +353,12 @@ export default function App() {
                     </div>
                 </div>
                 <input
+                    ref={searchRef}
                     className="search"
-                    placeholder="Search"
+                    placeholder={`Search (${MOD}K)`}
                     value={query}
                     onChange={e => setQuery(e.target.value)}
+                    onKeyDown={onSearchKey}
                 />
                 {!query.trim() && showHidden && (
                     <button className="requests-row" onClick={() => setShowHidden(false)}>
@@ -344,7 +413,7 @@ export default function App() {
                         Pigeonhole {updateStatus.latest?.version} is available. <span>Update</span>
                     </button>
                 )}
-                <ChatList chats={visibleChats} selected={selected} onSelect={setSelected} emptyText={emptyText} typing={typing}
+                <ChatList chats={visibleChats} selected={selected} highlighted={highlighted} onSelect={setSelected} emptyText={emptyText} typing={typing}
                           onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
                           onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>
                 {!query.trim() && !showHidden && hiddenCount > 0 && (
@@ -375,7 +444,12 @@ export default function App() {
                 setSignInNetwork('');
             }}/>}
             {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
-            {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}/>}
+            {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}
+                                       onShowShortcuts={() => {
+                                           setShowSettings(false);
+                                           setShowShortcuts(true);
+                                       }}/>}
+            {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)}/>}
         </div>
     );
 }

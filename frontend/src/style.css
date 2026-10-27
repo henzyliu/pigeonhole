@@ -193,6 +193,8 @@ button.row-menu-button:hover { color: var(--fg); }
 .chat-row:hover .chat-row-bottom > .list-status, .chat-row.menu-open .chat-row-bottom > .list-status { visibility: hidden; }
 .chat-row:hover { background: var(--bg-hover); }
 .chat-row.selected { background: var(--bg-selected); }
+/* The search result Enter opens. */
+.chat-row.highlighted:not(.selected) { background: var(--bg-hover); box-shadow: inset 3px 0 0 var(--accent); }
 .chat-row-body { flex: 1; min-width: 0; }
 .chat-row-top, .chat-row-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 /* The name, then a muted icon if any, then the time pushed to the right. */
@@ -633,3 +635,14 @@ button.switch.on .switch-knob { transform: translateX(16px); }
 .about-version { font-weight: 600; flex-shrink: 0; }
 .about-licence { margin-top: 4px; }
 .about-licence button.link { font-size: inherit; }
+
+/* Keyboard shortcuts (⌘/ or Ctrl+/). */
+.shortcut-list { margin: 0; display: grid; gap: 10px; }
+.shortcut-list > div { display: flex; align-items: baseline; gap: 16px; }
+.shortcut-list dt { flex: 0 0 140px; display: flex; gap: 4px; flex-wrap: wrap; }
+.shortcut-list dd { margin: 0; color: var(--fg); font-size: 13.5px; }
+kbd {
+    font: inherit; font-size: 12px; padding: 2px 7px; border-radius: 6px;
+    border: 1px solid var(--border); border-bottom-width: 2px; background: var(--bg-side); white-space: nowrap;
+}
+.shortcuts-link { align-self: flex-start; margin: -6px 0 6px; font-size: 13px; }

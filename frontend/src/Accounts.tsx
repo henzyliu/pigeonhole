@@ -1,6 +1,7 @@
 import {FormEvent, useEffect, useRef, useState} from 'react';
 import {BrowserOpenURL, errorText, Go, inbox, NETWORK_LABELS} from './api';
 import NetworkIcon from './NetworkIcon';
+import {useCloseOnEscape} from './shortcuts';
 
 type View =
     | {kind: 'list'}
@@ -105,6 +106,7 @@ export default function Accounts(props: {accounts: inbox.Account[]; signIn?: str
         if (view.kind === 'step') Go.CancelLogin(view.step.sessionId);
         props.onClose();
     };
+    useCloseOnEscape(close);
 
     return (
         <div className="modal-backdrop" onClick={close}>

@@ -6,6 +6,8 @@ import {splitLinks, typingText} from './links';
 export default function ChatList(props: {
     chats: inbox.Chat[];
     selected: string;
+    // The search result Enter would open.
+    highlighted?: string;
     onSelect: (roomId: string) => void;
     onSetHidden: (roomId: string, hidden: boolean) => void;
     onSetMuted: (roomId: string, muted: boolean) => void;
@@ -16,6 +18,13 @@ export default function ChatList(props: {
     // chat, so nothing is marked as read.
     const [menu, setMenu] = useState<{chat: inbox.Chat; x: number; y: number} | null>(null);
 
+    // Keep the open chat (or the search result about to be opened) in view
+    // when it's moved to from the keyboard.
+    const target = props.highlighted ?? props.selected;
+    useEffect(() => {
+        document.querySelector('.chat-row.highlighted, .chat-row.selected')?.scrollIntoView({block: 'nearest'});
+    }, [target]);
+
     if (props.chats.length === 0) {
         return <div className="chat-list-empty">{props.emptyText}</div>;
     }
@@ -24,7 +33,7 @@ export default function ChatList(props: {
         <ul className="chat-list" onScroll={() => setMenu(null)}>
             {props.chats.map(chat => (
                 <li key={chat.roomId}
-                    className={`chat-row ${chat.roomId === props.selected ? 'selected' : ''} ${chat.unread > 0 ? 'unread' : ''} ${menu?.chat.roomId === chat.roomId ? 'menu-open' : ''}`}
+                    className={`chat-row ${chat.roomId === props.selected ? 'selected' : ''} ${chat.roomId === props.highlighted ? 'highlighted' : ''} ${chat.unread > 0 ? 'unread' : ''} ${menu?.chat.roomId === chat.roomId ? 'menu-open' : ''}`}
                     onClick={() => props.onSelect(chat.roomId)}>
                     <Avatar name={chat.name} src={chat.avatar} size={44} network={chat.network}/>
                     <div className="chat-row-body">

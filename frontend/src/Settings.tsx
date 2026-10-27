@@ -4,6 +4,7 @@ import NetworkIcon from './NetworkIcon';
 import {main} from '../wailsjs/go/models';
 import {applyTheme, Theme} from './theme';
 import {UpdateRow, useUpdateStatus} from './updates';
+import {MOD, useCloseOnEscape} from './shortcuts';
 
 const THEMES: {id: Theme; label: string}[] = [
     {id: 'system', label: 'System'},
@@ -11,7 +12,8 @@ const THEMES: {id: Theme; label: string}[] = [
     {id: 'dark', label: 'Dark'},
 ];
 
-export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void}) {
+export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void}) {
+    useCloseOnEscape(props.onClose);
     const [error, setError] = useState('');
     const [version, setVersion] = useState<main.VersionInfo | null>(null);
     const [prefs, setPrefs] = useState<main.Settings | null>(null);
@@ -90,6 +92,7 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                     <h2>Settings</h2>
                     <button className="icon-button" onClick={props.onClose}>✕</button>
                 </div>
+                <button className="link shortcuts-link" onClick={props.onShowShortcuts}>Keyboard shortcuts ({MOD}/)</button>
                 {error && <div className="banner error">{error}</div>}
                 <div className="setting">
                     <div>
