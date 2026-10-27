@@ -39,6 +39,10 @@ type Settings struct {
 	// WelcomeDone records that the first-run welcome was finished (or
 	// skipped), so it isn't shown again.
 	WelcomeDone bool `json:"welcomeDone"`
+	// SingleChatList shows People, Groups and Marketplace chats in one list
+	// instead of separate tabs. Stored this way round so tabs are the
+	// default, including for settings saved before it existed.
+	SingleChatList bool `json:"singleChatList"`
 }
 
 func settingsPath(dir string) string { return filepath.Join(dir, "settings.json") }
@@ -169,6 +173,11 @@ func (a *App) SetAccountNotifications(network, loginID string, on bool) error {
 // before it had a welcome don't get one).
 func (a *App) ShowWelcome() bool {
 	return !a.GetSettings().WelcomeDone && !a.svc.HasChats(a.ctx)
+}
+
+// SetSeparateChats turns the People / Groups / Marketplace tabs on or off.
+func (a *App) SetSeparateChats(on bool) error {
+	return a.updateSettings(func(s *Settings) { s.SingleChatList = !on })
 }
 
 // FinishWelcome stops the welcome from showing again.

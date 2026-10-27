@@ -12,7 +12,7 @@ const THEMES: {id: Theme; label: string}[] = [
     {id: 'dark', label: 'Dark'},
 ];
 
-export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void; onShowWelcome: () => void}) {
+export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void; onShowWelcome: () => void; onSeparateTabs: (on: boolean) => void}) {
     useCloseOnEscape(props.onClose);
     const [error, setError] = useState('');
     const [version, setVersion] = useState<main.VersionInfo | null>(null);
@@ -112,6 +112,25 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                     </div>
                 </div>
                 {prefs && <>
+                    <div className="setting">
+                        <div>
+                            <div className="setting-label">Separate chat tabs</div>
+                            <div className="muted setting-hint">
+                                People, Groups and Marketplace as tabs. Turn off to see every chat in one list
+                                (message requests stay separate).
+                            </div>
+                        </div>
+                        <Switch label="Separate chat tabs" on={!prefs.singleChatList}
+                                onChange={on => {
+                                    // The chat list changes straight away, and changes back
+                                    // if the setting can't be saved.
+                                    props.onSeparateTabs(on);
+                                    setPref({singleChatList: !on}, () => Go.SetSeparateChats(on).catch(e => {
+                                        props.onSeparateTabs(!on);
+                                        throw e;
+                                    }));
+                                }}/>
+                    </div>
                     <div className="setting setting-group">
                         <div>
                             <div className="setting-label">Notifications</div>

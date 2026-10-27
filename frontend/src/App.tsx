@@ -121,6 +121,9 @@ export default function App() {
         return () => window.removeEventListener('keydown', onKey);
     }, [refresh, moveChat]);
     const [theme, setTheme] = useState<Theme>('system');
+    // Whether People, Groups and Marketplace are separate tabs (the default)
+    // or one list. Message requests stay apart either way.
+    const [separateTabs, setSeparateTabs] = useState(true);
     const updateStatus = useUpdateStatus();
 
     // The saved setting wins over the early copy index.html applied.
@@ -129,6 +132,7 @@ export default function App() {
             const t = (s?.theme as Theme) || 'system';
             applyTheme(t);
             setTheme(t);
+            setSeparateTabs(!s?.singleChatList);
         }).catch(console.error);
     }, []);
     const [startError, setStartError] = useState('');
@@ -275,12 +279,15 @@ export default function App() {
             // Search looks across every category, hidden chats included, so
             // nothing is out of reach.
             if (!q && showHidden !== c.hidden) return false;
-            if (!q && !showHidden && (c.category || 'inbox') !== category) return false;
+            if (!q && !showHidden) {
+                const cat = c.category || 'inbox';
+                if (separateTabs ? cat !== category : (cat === 'requests') !== (category === 'requests')) return false;
+            }
             if (filter === 'unread' && c.unread === 0) return false;
             if (filter !== 'all' && filter !== 'unread' && c.network !== filter) return false;
             return !q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q);
         });
-    }, [chats, category, filter, query, showHidden]);
+    }, [chats, category, filter, query, showHidden, separateTabs]);
     visibleRef.current = visibleChats;
 
     // In the search box, ↑ ↓ pick a result and Enter opens it; Escape
@@ -307,7 +314,10 @@ export default function App() {
     };
 
     const selectedChat = chats.find(c => c.roomId === selected);
-    const totalUnread = showHidden ? chats.filter(c => c.hidden && c.unread > 0).length : categoryStats[category].unread;
+    const totalUnread = showHidden ? chats.filter(c => c.hidden && c.unread > 0).length
+        : !separateTabs && category !== 'requests'
+            ? categoryStats.inbox.unread + categoryStats.groups.unread + categoryStats.marketplace.unread
+            : categoryStats[category].unread;
 
     // Hiding the open chat closes it, since it leaves the list you're looking at.
     const setChatHidden = async (roomId: string, hidden: boolean) => {
@@ -319,6 +329,7 @@ export default function App() {
         ? 'Connect an account to get started.'
         : showHidden ? 'No hidden chats.'
         : category === 'requests' ? 'No message requests.'
+            : !separateTabs ? 'No conversations yet. They\'ll appear as your accounts sync.'
             : category === 'marketplace' ? 'No Marketplace conversations.'
                 : category === 'groups' ? 'No group chats yet.'
                     : 'No conversations yet. They\'ll appear as your accounts sync.';
@@ -376,7 +387,7 @@ export default function App() {
                         <span className="muted">Hidden chats</span>
                     </button>
                 )}
-                {!query.trim() && !showHidden && category !== 'requests' && (
+                {separateTabs && !query.trim() && !showHidden && category !== 'requests' && (
                     <div className="tabs" role="tablist">
                         {tabs.map(t => (
                             <button key={t.id} role="tab" aria-selected={category === t.id}
@@ -451,6 +462,7 @@ export default function App() {
             </main>
             {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
             {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}
+                                       onSeparateTabs={setSeparateTabs}
                                        onShowShortcuts={() => {
                                            setShowSettings(false);
                                            setShowShortcuts(true);

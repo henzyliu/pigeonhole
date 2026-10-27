@@ -154,6 +154,10 @@ export function SetNotifications(arg1) {
   return window['go']['main']['App']['SetNotifications'](arg1);
 }
 
+export function SetSeparateChats(arg1) {
+  return window['go']['main']['App']['SetSeparateChats'](arg1);
+}
+
 export function SetStartAtLogin(arg1) {
   return window['go']['main']['App']['SetStartAtLogin'](arg1);
 }
