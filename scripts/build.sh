@@ -5,6 +5,9 @@
 #   scripts/build.sh            the Mac app (build/bin/Pigeonhole.app)
 #   scripts/build.sh windows    a Windows exe (build/bin/Pigeonhole.exe),
 #                               cross-compiled with MinGW (brew install mingw-w64)
+#
+# The GIF picker needs a GIPHY API key, taken from $GIPHY_API_KEY or the
+# file .giphy-key (kept out of git). Without one, the app has no GIFs.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -12,7 +15,11 @@ commit=$(git rev-parse --short HEAD)
 if [ -n "$(git status --porcelain)" ]; then
 	commit="$commit+changes"
 fi
-ldflags="-X main.commit=$commit -X main.branch=$(git rev-parse --abbrev-ref HEAD) -X main.buildDate=$(date -u +%Y-%m-%d)"
+giphy_key=${GIPHY_API_KEY:-}
+if [ -z "$giphy_key" ] && [ -f .giphy-key ]; then
+	giphy_key=$(tr -d '[:space:]' < .giphy-key)
+fi
+ldflags="-X main.commit=$commit -X main.branch=$(git rev-parse --abbrev-ref HEAD) -X main.buildDate=$(date -u +%Y-%m-%d) -X main.giphyKey=$giphy_key"
 wails=$(command -v wails || echo "$HOME/go/bin/wails")
 
 case "${1:-mac}" in

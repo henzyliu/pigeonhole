@@ -1,8 +1,9 @@
 import {ClipboardEvent, CSSProperties, Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
-import {errorText, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
+import {errorText, gifs, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
 import Avatar from './Avatar';
 import {linkify, openLink, typingText} from './links';
 import EmojiPicker from './EmojiPicker';
+import GifPicker from './GifPicker';
 import MediaViewer from './MediaViewer';
 import NetworkIcon from './NetworkIcon';
 
@@ -24,6 +25,21 @@ export default function Thread(props: {
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
     // The draft's reply, until that message has loaded and can be shown.
     const pendingReply = useRef(chat.draftReply ?? '');
+    // The GIF picker, shown above the message box; only offered when this
+    // build has a GIPHY key.
+    const [gifsEnabled, setGifsEnabled] = useState(false);
+    const [pickingGif, setPickingGif] = useState(false);
+    useEffect(() => {
+        Go.GIFsEnabled().then(setGifsEnabled).catch(() => setGifsEnabled(false));
+    }, []);
+    const closeGifs = useCallback(() => setPickingGif(false), []);
+    const sendGif = (gif: gifs.GIF) => {
+        setPickingGif(false);
+        setError('');
+        stickToBottom.current = true;
+        Go.SendGIF(chat.roomId, gif.id).catch(e => setError(errorText(e)));
+        composer.current?.focus();
+    };
     // The message being edited, which borrows the message box; the draft
     // that was there comes back afterwards.
     const [editing, setEditing] = useState<inbox.Message | null>(null);
@@ -330,11 +346,16 @@ export default function Thread(props: {
                 </div>
             )}
             <div className="composer">
+                {pickingGif && <GifPicker onPick={sendGif} onClose={closeGifs}/>}
                 <button className="icon-button attach" title="Send photos or files" onClick={attach}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l7.9-7.9"/>
                     </svg>
                 </button>
+                {gifsEnabled && !editing && (
+                    <button className={`icon-button gif-button ${pickingGif ? 'active' : ''}`} title="Send a GIF"
+                            aria-label="Send a GIF" aria-expanded={pickingGif} onClick={() => setPickingGif(p => !p)}>GIF</button>
+                )}
                 <textarea ref={composer} rows={1} placeholder={editing ? 'Edit message' : `Message ${chat.name}`} value={draft}
                           onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>{editing ? 'Save' : 'Send'}</button>

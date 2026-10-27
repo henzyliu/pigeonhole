@@ -4,3 +4,5 @@ frontend/dist/*
 !frontend/dist/.gitkeep
 .DS_Store
 build/windows/installer/tmp
+# The GIPHY API key for local builds (see scripts/build.sh).
+.giphy-key

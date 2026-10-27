@@ -1,7 +1,7 @@
 // Thin re-export of the generated Wails bindings so components don't import
 // from the generated folder directly.
 export * as Go from '../wailsjs/go/main/App';
-export {inbox} from '../wailsjs/go/models';
+export {gifs, inbox} from '../wailsjs/go/models';
 export {EventsOn, BrowserOpenURL, OnFileDrop, OnFileDropOff} from '../wailsjs/runtime/runtime';
 
 export const NETWORK_LABELS: Record<string, string> = {

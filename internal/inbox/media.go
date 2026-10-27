@@ -222,3 +222,30 @@ func (s *Service) loginForRoom(ctx context.Context, n *Network, roomID string) *
 	}
 	return nil
 }
+
+// ChatNetwork says which network a chat is on ("whatsapp", ...).
+func (s *Service) ChatNetwork(ctx context.Context, roomID string) (string, error) {
+	var netID string
+	err := s.Store.DB.QueryRowContext(ctx, "SELECT network FROM rooms WHERE room_id=?", roomID).Scan(&netID)
+	return netID, err
+}
+
+// SendGIFVideo sends a GIF as a silent looping MP4, which is how WhatsApp
+// sends GIFs (the bridge would need ffmpeg to convert a .gif).
+func (s *Service) SendGIFVideo(ctx context.Context, roomID string, data []byte, width, height int) error {
+	n, err := s.roomNetwork(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	uri, _, err := n.MX.BotIntent().UploadMedia(ctx, id.RoomID(roomID), data, "GIF.mp4", "video/mp4")
+	if err != nil {
+		return fmt.Errorf("failed to store the GIF: %w", err)
+	}
+	return s.sendLocal(ctx, roomID, event.EventMessage, &event.MessageEventContent{
+		MsgType:  event.MsgVideo,
+		Body:     "GIF.mp4",
+		FileName: "GIF.mp4",
+		URL:      uri,
+		Info:     &event.FileInfo{MimeType: "video/mp4", Size: len(data), Width: width, Height: height, MauGIF: true},
+	})
+}

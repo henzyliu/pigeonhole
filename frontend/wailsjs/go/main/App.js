@@ -26,6 +26,10 @@ export function EditMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['EditMessage'](arg1, arg2, arg3);
 }
 
+export function GIFsEnabled() {
+  return window['go']['main']['App']['GIFsEnabled']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
@@ -98,12 +102,20 @@ export function SaveMedia(arg1, arg2) {
   return window['go']['main']['App']['SaveMedia'](arg1, arg2);
 }
 
+export function SearchGIFs(arg1, arg2) {
+  return window['go']['main']['App']['SearchGIFs'](arg1, arg2);
+}
+
 export function SearchPeople(arg1) {
   return window['go']['main']['App']['SearchPeople'](arg1);
 }
 
 export function SendFiles(arg1, arg2) {
   return window['go']['main']['App']['SendFiles'](arg1, arg2);
+}
+
+export function SendGIF(arg1, arg2) {
+  return window['go']['main']['App']['SendGIF'](arg1, arg2);
 }
 
 export function SendPastedFile(arg1, arg2, arg3) {

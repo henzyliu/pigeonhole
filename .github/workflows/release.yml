@@ -67,9 +67,13 @@ jobs:
           fi
           echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
       # The commit, tag (or branch) and date show under Settings → About.
-      - run: >
+      # The GIPHY key (a repository secret) turns on the GIF picker; without
+      # it the app builds fine, just without GIFs.
+      - env:
+          GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+        run: >
           wails build -clean -platform ${{ matrix.platform }} ${{ runner.os == 'Windows' && '-nsis' || '' }}
-          -ldflags "-X main.commit=${GITHUB_SHA::7} -X main.branch=${GITHUB_REF_NAME} -X main.buildDate=$(date -u +%Y-%m-%d)"
+          -ldflags "-X main.commit=${GITHUB_SHA::7} -X main.branch=${GITHUB_REF_NAME} -X main.buildDate=$(date -u +%Y-%m-%d) -X main.giphyKey=${GIPHY_API_KEY}"
       # A disk image with the app beside a shortcut to Applications, to drag
       # it onto.
       - if: runner.os == 'macOS'

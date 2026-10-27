@@ -1,3 +1,28 @@
+export namespace gifs {
+	
+	export class GIF {
+	    id: string;
+	    title: string;
+	    preview: string;
+	    previewWidth: number;
+	    previewHeight: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GIF(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.preview = source["preview"];
+	        this.previewWidth = source["previewWidth"];
+	        this.previewHeight = source["previewHeight"];
+	    }
+	}
+
+}
+
 export namespace inbox {
 	
 	export class Account {

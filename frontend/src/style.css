@@ -458,6 +458,26 @@ button.viewer-nav.next { right: 14px; }
 }
 .composer textarea:focus { border-color: var(--accent); }
 .composer .attach { width: 38px; height: 38px; border-radius: 50%; }
+.composer { position: relative; }
+.composer .gif-button {
+    height: 38px; padding: 0 8px; border-radius: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+}
+.composer .gif-button.active { color: var(--accent); }
+/* The GIF picker floats above the message box. */
+.gif-picker {
+    position: absolute; bottom: calc(100% - 4px); left: 20px; z-index: 20;
+    width: min(380px, calc(100% - 40px)); height: min(440px, 60vh);
+    display: flex; flex-direction: column; gap: 8px; padding: 10px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+}
+.gif-picker .search { margin: 0; width: 100%; }
+.gif-grid { flex: 1; overflow-y: auto; display: flex; gap: 6px; align-items: flex-start; }
+.gif-column { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gif-grid button.gif { display: block; width: 100%; padding: 0; border: none; border-radius: 8px; overflow: hidden; background: var(--bg-hover); cursor: pointer; }
+.gif-grid button.gif img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gif-grid button.gif:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+.gif-empty { flex: 1; text-align: center; margin-top: 40px; }
+.gif-footer { font-size: 11px; color: var(--fg-muted); text-align: right; letter-spacing: 0.02em; }
 
 button.primary {
     background: var(--accent); color: var(--fg-on-accent); border: none;
