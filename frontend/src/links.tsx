@@ -1,3 +1,4 @@
+import {Fragment} from 'react';
 import {BrowserOpenURL} from './api';
 
 export type Segment = {text: string; url?: string};
@@ -78,11 +79,28 @@ export function openLink(url: string) {
     BrowserOpenURL(url);
 }
 
-export function linkify(text: string) {
+export function linkify(text: string, highlight = '') {
     return splitLinks(text).map((seg, i) => seg.url
         ? <a key={i} href={seg.url} title={seg.url} onClick={e => {
             e.preventDefault();
             openLink(seg.url!);
-        }}>{seg.text}</a>
-        : seg.text);
+        }}>{highlightText(seg.text, highlight)}</a>
+        : <Fragment key={i}>{highlightText(seg.text, highlight)}</Fragment>);
+}
+
+// highlightText marks each occurrence of query in text, ignoring case.
+export function highlightText(text: string, query: string) {
+    const needle = query.toLowerCase();
+    if (!needle) return text;
+    const lower = text.toLowerCase();
+    const parts = [];
+    let from = 0;
+    for (let at = lower.indexOf(needle); at >= 0; at = lower.indexOf(needle, from)) {
+        if (at > from) parts.push(text.slice(from, at));
+        parts.push(<mark key={at}>{text.slice(at, at + needle.length)}</mark>);
+        from = at + needle.length;
+    }
+    if (parts.length === 0) return text;
+    if (from < text.length) parts.push(text.slice(from));
+    return <>{parts}</>;
 }

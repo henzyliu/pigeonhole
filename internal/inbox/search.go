@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"maunium.net/go/mautrix/id"
@@ -36,17 +37,7 @@ func (s *Service) SearchMessages(ctx context.Context, query string, offset int) 
 	if len([]rune(query)) < 2 {
 		return []SearchResult{}, nil
 	}
-	pattern := "%" + likeEscaper.Replace(query) + "%"
-	rows, err := s.Store.DB.QueryContext(ctx, `
-		SELECT e.event_id, e.room_id, e.sender, e.ts, json_extract(e.content, '$.body') AS body
-		FROM events e JOIN rooms r ON r.room_id = e.room_id AND r.is_portal = 1
-		WHERE e.type = 'm.room.message' AND e.redacted = 0
-			AND (json_extract(e.content, '$.msgtype') IN ('m.text', 'm.notice', 'm.emote')
-				-- a photo or video's body is its caption when it has a separate file name
-				OR (json_extract(e.content, '$.filename') IS NOT NULL
-					AND json_extract(e.content, '$.body') <> json_extract(e.content, '$.filename')))
-			AND body LIKE ? ESCAPE '\'
-		ORDER BY e.ts DESC LIMIT ? OFFSET ?`, pattern, SearchPageSize, offset)
+	rows, err := s.searchRows(ctx, query, "", SearchPageSize, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +82,48 @@ func (s *Service) SearchMessages(ctx context.Context, query string, offset int) 
 		r.SenderName = profiles[id.UserID(r.SenderName)].name
 	}
 	return out, nil
+}
+
+// searchRows runs the search, in one chat if roomID is set.
+func (s *Service) searchRows(ctx context.Context, query, roomID string, limit, offset int) (*sql.Rows, error) {
+	return s.Store.DB.QueryContext(ctx, `
+		SELECT e.event_id, e.room_id, e.sender, e.ts, json_extract(e.content, '$.body') AS body
+		FROM events e JOIN rooms r ON r.room_id = e.room_id AND r.is_portal = 1
+		WHERE e.type = 'm.room.message' AND e.redacted = 0 AND (? = '' OR e.room_id = ?)
+			AND (json_extract(e.content, '$.msgtype') IN ('m.text', 'm.notice', 'm.emote')
+				-- a photo or video's body is its caption when it has a separate file name
+				OR (json_extract(e.content, '$.filename') IS NOT NULL
+					AND json_extract(e.content, '$.body') <> json_extract(e.content, '$.filename')))
+			AND body LIKE ? ESCAPE '\'
+		ORDER BY e.ts DESC LIMIT ? OFFSET ?`,
+		roomID, roomID, "%"+likeEscaper.Replace(query)+"%", limit, offset)
+}
+
+// maxChatMatches caps how many matches a search in one chat steps through.
+const maxChatMatches = 500
+
+// SearchChat finds messages in one chat containing query, newest first, as
+// event IDs to step through.
+func (s *Service) SearchChat(ctx context.Context, roomID, query string) ([]string, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []string{}, nil
+	}
+	rows, err := s.searchRows(ctx, query, roomID, maxChatMatches, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var eventID, room, sender, body string
+		var ts int64
+		if err = rows.Scan(&eventID, &room, &sender, &ts, &body); err != nil {
+			return nil, err
+		}
+		out = append(out, eventID)
+	}
+	return out, rows.Err()
 }
 
 // likeEscaper escapes LIKE's wildcards so a search for "50%" means that.

@@ -265,6 +265,11 @@ func (a *App) SearchMessages(query string, offset int) ([]inbox.SearchResult, er
 	return a.svc.SearchMessages(a.ctx, query, offset)
 }
 
+// SearchChat finds messages in one chat, newest first, as event IDs.
+func (a *App) SearchChat(roomID, query string) ([]string, error) {
+	return a.svc.SearchChat(a.ctx, roomID, query)
+}
+
 // MessagesThrough loads a chat back to a given message, to jump to it.
 func (a *App) MessagesThrough(roomID, eventID string) ([]inbox.Message, error) {
 	return a.svc.MessagesThrough(a.ctx, roomID, eventID)

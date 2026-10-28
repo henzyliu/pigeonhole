@@ -6,6 +6,7 @@ import EmojiPicker from './EmojiPicker';
 import GifPicker from './GifPicker';
 import MediaViewer from './MediaViewer';
 import NetworkIcon from './NetworkIcon';
+import {isMod, MOD} from './shortcuts';
 
 const PAGE = 50;
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '👍'];
@@ -25,6 +26,17 @@ export default function Thread(props: {
     // The message to scroll to once loaded, and the one briefly highlighted.
     const scrollTarget = useRef(props.jumpTo ?? '');
     const [flashing, setFlashing] = useState('');
+    const flash = (eventId: string) => {
+        setFlashing(eventId);
+        window.setTimeout(() => setFlashing(f => f === eventId ? '' : f), 2500);
+    };
+    // Find in this chat (⌘F): matching message IDs newest first, and which
+    // one is showing.
+    const [findOpen, setFindOpen] = useState(false);
+    const [findQuery, setFindQuery] = useState('');
+    const [matches, setMatches] = useState<string[]>([]);
+    const [matchIndex, setMatchIndex] = useState(0);
+    const findInput = useRef<HTMLInputElement>(null);
     // The message being typed starts from the chat's saved draft.
     const [draft, setDraft] = useState(chat.draft ?? '');
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
@@ -167,8 +179,7 @@ export default function Thread(props: {
         const target = scrollTarget.current && el.querySelector(`[data-event-id="${CSS.escape(scrollTarget.current)}"]`);
         if (target) {
             target.scrollIntoView({block: 'center'});
-            setFlashing(scrollTarget.current);
-            window.setTimeout(() => setFlashing(''), 2500);
+            flash(scrollTarget.current);
             scrollTarget.current = '';
             return;
         }
@@ -179,6 +190,88 @@ export default function Thread(props: {
             el.scrollTop = el.scrollHeight;
         }
     }, [messages, props.typing]);
+
+    // Scrolls to a message, loading older history back to it if needed.
+    const goTo = (eventId: string) => {
+        stickToBottom.current = false;
+        const el = scroller.current?.querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
+        if (el) {
+            el.scrollIntoView({block: 'center'});
+            flash(eventId);
+            return;
+        }
+        scrollTarget.current = eventId;
+        Go.MessagesThrough(chat.roomId, eventId).then(list => {
+            setMessages(list ?? []);
+            setHasMore(true);
+        }).catch(e => setError(errorText(e)));
+    };
+
+    const openFind = () => {
+        setFindOpen(true);
+        window.setTimeout(() => {
+            findInput.current?.focus();
+            findInput.current?.select();
+        });
+    };
+    const closeFind = () => {
+        setFindOpen(false);
+        setFindQuery('');
+        setMatches([]);
+        composer.current?.focus();
+    };
+    // Search as you type, going to the newest match.
+    useEffect(() => {
+        const q = findQuery.trim();
+        if (!q) {
+            setMatches([]);
+            return;
+        }
+        let current = true;
+        const timer = window.setTimeout(() => {
+            Go.SearchChat(chat.roomId, q).then(ids => {
+                if (!current) return;
+                setMatches(ids ?? []);
+                setMatchIndex(0);
+                if (ids?.length) goTo(ids[0]);
+            }).catch(e => setError(errorText(e)));
+        }, 200);
+        return () => {
+            current = false;
+            window.clearTimeout(timer);
+        };
+    }, [findQuery, chat.roomId]);
+    // step moves to an older (+1) or newer (-1) match, wrapping around.
+    const step = (dir: 1 | -1) => {
+        if (matches.length === 0) return;
+        const i = (matchIndex + dir + matches.length) % matches.length;
+        setMatchIndex(i);
+        goTo(matches[i]);
+    };
+    const onFindKey = (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            step(e.shiftKey ? -1 : 1);
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            step(e.key === 'ArrowUp' ? 1 : -1);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeFind();
+        }
+    };
+    // ⌘F / Ctrl+F opens it.
+    useEffect(() => {
+        const onKey = (e: globalThis.KeyboardEvent) => {
+            if (isMod(e) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                openFind();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+    const findHighlight = findOpen ? findQuery.trim() : '';
 
     const loadOlder = async () => {
         if (!hasMore || messages.length === 0) return;
@@ -310,12 +403,35 @@ export default function Thread(props: {
                     <div className="thread-title">{chat.name}</div>
                     <div className="thread-subtitle"><NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}</div>
                 </div>
+                <button className="icon-button thread-find" title={`Search this chat (${MOD}F)`} aria-label="Search this chat"
+                        onClick={() => findOpen ? closeFind() : openFind()}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="m20 20-3.5-3.5"/>
+                    </svg>
+                </button>
                 <button className="link thread-hide"
                         title={chat.hidden ? 'Move this chat back to your chat list' : 'Hide this chat until a new message arrives. Only in Pigeonhole.'}
                         onClick={() => props.onSetHidden(!chat.hidden).catch(e => setError(errorText(e)))}>
                     {chat.hidden ? 'Unhide' : 'Hide chat'}
                 </button>
             </header>
+            {findOpen && (
+                <div className="find-bar">
+                    <input ref={findInput} className="search" placeholder={`Search in ${chat.name || 'this chat'}`}
+                           value={findQuery} onChange={e => setFindQuery(e.target.value)} onKeyDown={onFindKey}/>
+                    <span className="find-count">
+                        {findQuery.trim() && (matches.length
+                            ? `${matchIndex + 1} of ${matches.length}${matches.length >= 500 ? '+' : ''}`
+                            : 'No matches')}
+                    </span>
+                    <button className="icon-button" title="Older match (Enter)" aria-label="Older match"
+                            disabled={matches.length === 0} onClick={() => step(1)}>↑</button>
+                    <button className="icon-button" title="Newer match (Shift+Enter)" aria-label="Newer match"
+                            disabled={matches.length === 0} onClick={() => step(-1)}>↓</button>
+                    <button className="icon-button" title="Close (Esc)" aria-label="Close search" onClick={closeFind}>✕</button>
+                </div>
+            )}
             <div className="messages" ref={scroller} onScroll={onScroll}>
                 {chat.historyLoading && !hasMore && (
                     <div className="history-loading">
@@ -330,6 +446,7 @@ export default function Thread(props: {
                         <Fragment key={m.eventId}>
                             {newDay && <div className="day-divider">{new Date(m.ts).toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'})}</div>}
                             <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm} flash={m.eventId === flashing}
+                                        highlight={findHighlight}
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => startReply(m)} onReact={key => react(m, key)}
@@ -415,6 +532,8 @@ function MessageRow(props: {
     msg: inbox.Message;
     grouped: boolean;
     flash?: boolean;
+    // Text to mark in the message (Find in this chat).
+    highlight?: string;
     showSender: boolean;
     isLatestMine: boolean;
     replied?: inbox.Message;
@@ -471,7 +590,7 @@ function MessageRow(props: {
                 )}
                 <div className="msg-line">
                     <div className={`bubble ${msg.kind} ${msg.redacted ? 'redacted' : ''} ${msg.pending ? 'changing' : ''}`} title={new Date(msg.ts).toLocaleString()}>
-                        <MessageBody msg={msg} onOpenMedia={props.onOpenMedia} onFetch={props.onFetch}/>
+                        <MessageBody msg={msg} highlight={props.highlight ?? ''} onOpenMedia={props.onOpenMedia} onFetch={props.onFetch}/>
                     </div>
                     {!msg.redacted && (
                         <div className="msg-actions" role="toolbar" ref={actionsRef}>
@@ -633,9 +752,9 @@ function SeenBy(props: {readers: inbox.Reader[]; isDm: boolean; isMe: boolean}) 
     );
 }
 
-function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMedia: () => void; onFetch: () => Promise<void>}) {
+function MessageBody({msg, highlight, onOpenMedia, onFetch}: {msg: inbox.Message; highlight: string; onOpenMedia: () => void; onFetch: () => Promise<void>}) {
     if (msg.redacted) return <em>Message deleted</em>;
-    const caption = msg.body ? <div className="caption">{linkify(msg.body)}</div> : null;
+    const caption = msg.body ? <div className="caption">{linkify(msg.body, highlight)}</div> : null;
     switch (msg.kind) {
         case 'image':
             // Always inside MediaFrame, so loading a post keeps this <img>
@@ -660,9 +779,9 @@ function MessageBody({msg, onOpenMedia, onFetch}: {msg: inbox.Message; onOpenMed
                 Go.OpenMedia(msg.mediaUrl, msg.fileName).catch(console.error);
             }}>📎 {msg.fileName}</a>{caption}</>;
         case 'emote':
-            return <em>{linkify(msg.body)}</em>;
+            return <em>{linkify(msg.body, highlight)}</em>;
         default:
-            return <>{linkify(msg.body)}{msg.edited && <span className="edited"> (edited)</span>}</>;
+            return <>{linkify(msg.body, highlight)}{msg.edited && <span className="edited"> (edited)</span>}</>;
     }
 }
 

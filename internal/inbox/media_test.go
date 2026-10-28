@@ -571,3 +571,28 @@ func first(msgs []Message) string {
 	}
 	return msgs[0].Body
 }
+
+// Searching one chat only finds that chat's messages, newest first.
+func TestSearchChat(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomA, sendA := newPortal(t, svc, "whatsapp")
+	_, sendB := newPortal(t, svc, "messenger")
+	start := time.Now().Add(-time.Hour)
+	sendA("pizza tonight?", start)
+	sendB("pizza in the other chat", start.Add(time.Minute))
+	sendA("no", start.Add(2*time.Minute))
+	sendA("ok PIZZA then", start.Add(3*time.Minute))
+	ids, err := svc.SearchChat(ctx, string(roomA), "pizza")
+	if err != nil || len(ids) != 2 {
+		t.Fatalf("matches: %v, %v", ids, err)
+	}
+	msgs, _ := svc.Messages(ctx, string(roomA), 0, 10)
+	body := map[string]string{}
+	for _, m := range msgs {
+		body[m.EventID] = m.Body
+	}
+	if body[ids[0]] != "ok PIZZA then" || body[ids[1]] != "pizza tonight?" {
+		t.Fatalf("expected this chat's matches, newest first: %q, %q", body[ids[0]], body[ids[1]])
+	}
+}

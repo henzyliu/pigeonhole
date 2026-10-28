@@ -114,6 +114,10 @@ export function SaveMedia(arg1, arg2) {
   return window['go']['main']['App']['SaveMedia'](arg1, arg2);
 }
 
+export function SearchChat(arg1, arg2) {
+  return window['go']['main']['App']['SearchChat'](arg1, arg2);
+}
+
 export function SearchGIFs(arg1, arg2) {
   return window['go']['main']['App']['SearchGIFs'](arg1, arg2);
 }

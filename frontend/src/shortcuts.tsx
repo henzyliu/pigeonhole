@@ -12,6 +12,7 @@ export function isMod(e: KeyboardEvent | ReactKeyboardEvent): boolean {
 
 export const SHORTCUTS: {keys: string; what: string}[] = [
     {keys: `${MOD}K`, what: 'Jump to a chat (then ↑ ↓ and Enter)'},
+    {keys: `${MOD}F`, what: 'Search the open chat (then Enter for older matches)'},
     {keys: `${MOD}N`, what: 'New chat'},
     {keys: `${ALT}↑  ${ALT}↓`, what: 'Previous or next chat'},
     {keys: `${ALT}⇧↑  ${ALT}⇧↓`, what: 'Previous or next unread chat'},

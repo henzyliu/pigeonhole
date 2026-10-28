@@ -698,3 +698,12 @@ kbd {
     0%, 30% { box-shadow: 0 0 0 3px var(--accent); }
     100% { box-shadow: 0 0 0 3px transparent; }
 }
+
+/* Find in this chat (⌘F). */
+.thread-header .thread-find { margin-left: auto; --wails-draggable: no-drag; }
+.thread-header .thread-find + .thread-hide { margin-left: 4px; }
+.find-bar { display: flex; align-items: center; gap: 6px; padding: 8px 16px 8px 20px; border-bottom: 1px solid var(--border); }
+.find-bar .search { flex: 1; margin: 0; }
+.find-count { font-size: 12.5px; color: var(--fg-muted); min-width: 72px; text-align: right; white-space: nowrap; }
+.find-bar .icon-button { width: 30px; height: 30px; }
+.bubble mark { background: #ffd54a; color: #1d1d1f; border-radius: 3px; padding: 0 1px; }

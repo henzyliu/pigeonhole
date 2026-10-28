@@ -60,6 +60,8 @@ export function RetrySend(arg1:string,arg2:string):Promise<void>;
 
 export function SaveMedia(arg1:string,arg2:string):Promise<void>;
 
+export function SearchChat(arg1:string,arg2:string):Promise<Array<string>>;
+
 export function SearchGIFs(arg1:string,arg2:number):Promise<Array<gifs.GIF>>;
 
 export function SearchMessages(arg1:string,arg2:number):Promise<Array<inbox.SearchResult>>;
