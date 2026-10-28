@@ -10,6 +10,8 @@ export function BrowserLogin(arg1:string):Promise<inbox.LoginStep>;
 
 export function CancelLogin(arg1:string):Promise<void>;
 
+export function ChatShared(arg1:string,arg2:string,arg3:number):Promise<Array<inbox.Message>>;
+
 export function Chats():Promise<Array<inbox.Chat>>;
 
 export function CheckForUpdates():Promise<main.UpdateStatus>;

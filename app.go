@@ -265,6 +265,12 @@ func (a *App) SearchMessages(query string, offset int) ([]inbox.SearchResult, er
 	return a.svc.SearchMessages(a.ctx, query, offset)
 }
 
+// ChatShared lists photos and videos ("media"), files ("files") or
+// messages with links ("links") shared in a chat, newest first.
+func (a *App) ChatShared(roomID, kind string, offset int) ([]inbox.Message, error) {
+	return a.svc.ChatShared(a.ctx, roomID, kind, offset)
+}
+
 // SearchChat finds messages in one chat, newest first, as event IDs.
 func (a *App) SearchChat(roomID, query string) ([]string, error) {
 	return a.svc.SearchChat(a.ctx, roomID, query)

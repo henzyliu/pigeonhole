@@ -596,3 +596,47 @@ func TestSearchChat(t *testing.T) {
 		t.Fatalf("expected this chat's matches, newest first: %q, %q", body[ids[0]], body[ids[1]])
 	}
 }
+
+// The Shared panel lists each kind separately, newest first.
+func TestChatShared(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, send := newPortal(t, svc, "whatsapp")
+	start := time.Now().Add(-time.Hour)
+	send("see https://example.com/a", start)
+	send("just text", start.Add(time.Minute))
+	for i, c := range []*event.MessageEventContent{
+		{MsgType: event.MsgImage, Body: "photo.jpg", URL: "mxc://local/p1"},
+		{MsgType: event.MsgVideo, Body: "clip.mp4", URL: "mxc://local/v1"},
+		{MsgType: event.MsgFile, Body: "notes.pdf", FileName: "notes.pdf", URL: "mxc://local/f1"},
+	} {
+		evt := &event.Event{ID: id.EventID(fmt.Sprintf("$s%d", i)), RoomID: roomID, Sender: Me, Type: event.EventMessage,
+			Timestamp: start.Add(time.Duration(i+2) * time.Minute).UnixMilli(), Content: event.Content{Parsed: c}}
+		if err := svc.Store.HandleEvent(ctx, evt, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	kinds := func(kind string) (out []string) {
+		t.Helper()
+		items, err := svc.ChatShared(ctx, string(roomID), kind, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range items {
+			out = append(out, m.Kind+":"+m.FileName+m.Body)
+		}
+		return
+	}
+	if got := kinds("media"); len(got) != 2 || got[0] != "video:clip.mp4" || got[1] != "image:photo.jpg" {
+		t.Fatalf("media: %v", got)
+	}
+	if got := kinds("files"); len(got) != 1 || got[0] != "file:notes.pdf" {
+		t.Fatalf("files: %v", got)
+	}
+	if got := kinds("links"); len(got) != 1 || got[0] != "text:see https://example.com/a" {
+		t.Fatalf("links: %v", got)
+	}
+	if _, err := svc.ChatShared(ctx, string(roomID), "nope", 0); err == nil {
+		t.Fatal("unknown kinds should be refused")
+	}
+}

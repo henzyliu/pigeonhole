@@ -14,6 +14,10 @@ export function CancelLogin(arg1) {
   return window['go']['main']['App']['CancelLogin'](arg1);
 }
 
+export function ChatShared(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ChatShared'](arg1, arg2, arg3);
+}
+
 export function Chats() {
   return window['go']['main']['App']['Chats']();
 }

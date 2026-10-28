@@ -5,6 +5,7 @@ import {linkify, openLink, typingText} from './links';
 import EmojiPicker from './EmojiPicker';
 import GifPicker from './GifPicker';
 import MediaViewer from './MediaViewer';
+import SharedPanel from './SharedPanel';
 import NetworkIcon from './NetworkIcon';
 import {isMod, MOD} from './shortcuts';
 
@@ -37,6 +38,8 @@ export default function Thread(props: {
     const [matches, setMatches] = useState<string[]>([]);
     const [matchIndex, setMatchIndex] = useState(0);
     const findInput = useRef<HTMLInputElement>(null);
+    // The Shared panel (photos, files and links in this chat).
+    const [sharedOpen, setSharedOpen] = useState(false);
     // The message being typed starts from the chat's saved draft.
     const [draft, setDraft] = useState(chat.draft ?? '');
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
@@ -403,6 +406,14 @@ export default function Thread(props: {
                     <div className="thread-title">{chat.name}</div>
                     <div className="thread-subtitle"><NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}</div>
                 </div>
+                <button className={`icon-button thread-shared ${sharedOpen ? 'active' : ''}`} title="Photos, files and links in this chat"
+                        aria-label="Shared in this chat" aria-expanded={sharedOpen} onClick={() => setSharedOpen(o => !o)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="16" rx="2"/>
+                        <circle cx="9" cy="10" r="2"/>
+                        <path d="m21 16-5-5-9 9"/>
+                    </svg>
+                </button>
                 <button className="icon-button thread-find" title={`Search this chat (${MOD}F)`} aria-label="Search this chat"
                         onClick={() => findOpen ? closeFind() : openFind()}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -504,6 +515,12 @@ export default function Thread(props: {
                           onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>{editing ? 'Save' : 'Send'}</button>
             </div>
+            {sharedOpen && (
+                <SharedPanel chat={chat} onClose={() => setSharedOpen(false)} onShowInChat={eventId => {
+                    setSharedOpen(false);
+                    goTo(eventId);
+                }}/>
+            )}
             {viewingIndex >= 0 && (
                 <MediaViewer items={media} index={viewingIndex}
                              onIndex={i => setViewing(media[i].eventId)} onClose={() => setViewing(null)}/>
