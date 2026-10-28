@@ -2,6 +2,7 @@ import {KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, us
 import {EventsOn, Go, inbox, NETWORK_LABELS} from './api';
 import {isMod, MOD, ShortcutsHelp} from './shortcuts';
 import ChatList from './ChatList';
+import MessageResults from './MessageResults';
 import Thread from './Thread';
 import Welcome from './Welcome';
 import Accounts from './Accounts';
@@ -49,6 +50,9 @@ export default function App() {
         window.setTimeout(() => setRefreshing(false), 1500);
     }, []);
     const [showShortcuts, setShowShortcuts] = useState(false);
+    // A search result being opened: its chat opens at that message. seq
+    // makes opening the same chat again (at another result) reload it.
+    const [jump, setJump] = useState<{roomId: string; eventId: string; seq: number} | null>(null);
     // The first-run welcome, for someone with no chats yet.
     const [showWelcome, setShowWelcome] = useState(false);
     useEffect(() => {
@@ -273,6 +277,11 @@ export default function App() {
         if (showHidden && hiddenCount === 0) setShowHidden(false);
     }, [showHidden, hiddenCount]);
 
+    // A jump only applies while its chat stays open.
+    useEffect(() => {
+        if (jump && selected !== jump.roomId) setJump(null);
+    }, [selected, jump]);
+
     const visibleChats = useMemo(() => {
         const q = query.trim().toLowerCase();
         return chats.filter(c => {
@@ -434,9 +443,25 @@ export default function App() {
                         Pigeonhole {updateStatus.latest?.version} is available. <span>Update</span>
                     </button>
                 )}
-                <ChatList chats={visibleChats} selected={selected} highlighted={highlighted} onSelect={setSelected} emptyText={emptyText} typing={typing}
-                          onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
-                          onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>
+                {(() => {
+                    const list = (
+                        <ChatList chats={visibleChats} selected={selected} highlighted={highlighted} onSelect={setSelected}
+                                  emptyText={query.trim() ? 'No chats match.' : emptyText} typing={typing}
+                                  onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
+                                  onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>
+                    );
+                    // While searching, matching messages follow the matching chats.
+                    return query.trim() ? (
+                        <div className="search-scroll">
+                            <div className="results-heading">Chats</div>
+                            {list}
+                            <MessageResults query={query} onOpen={r => {
+                                setJump(j => ({roomId: r.roomId, eventId: r.eventId, seq: (j?.seq ?? 0) + 1}));
+                                showChat(r.roomId, chats);
+                            }}/>
+                        </div>
+                    ) : list;
+                })()}
                 {!query.trim() && !showHidden && hiddenCount > 0 && (
                     <button className="requests-row hidden-row" onClick={() => {
                         setShowHidden(true);
@@ -449,7 +474,9 @@ export default function App() {
             </aside>
             <main className="main">
                 {selectedChat
-                    ? <Thread key={selectedChat.roomId} chat={selectedChat} tick={messageTick}
+                    ? <Thread key={selectedChat.roomId + (jump?.roomId === selectedChat.roomId ? ':' + jump.seq : '')}
+                              jumpTo={jump?.roomId === selectedChat.roomId ? jump.eventId : undefined}
+                              chat={selectedChat} tick={messageTick}
                               typing={typing[selectedChat.roomId] ?? NO_ONE}
                               signedOut={signedOutOf(accounts, selectedChat.network)}
                               onSignIn={() => openSignIn(selectedChat.network)}

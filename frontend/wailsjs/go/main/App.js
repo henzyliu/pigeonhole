@@ -62,6 +62,10 @@ export function Messages(arg1, arg2, arg3) {
   return window['go']['main']['App']['Messages'](arg1, arg2, arg3);
 }
 
+export function MessagesThrough(arg1, arg2) {
+  return window['go']['main']['App']['MessagesThrough'](arg1, arg2);
+}
+
 export function Networks() {
   return window['go']['main']['App']['Networks']();
 }
@@ -112,6 +116,10 @@ export function SaveMedia(arg1, arg2) {
 
 export function SearchGIFs(arg1, arg2) {
   return window['go']['main']['App']['SearchGIFs'](arg1, arg2);
+}
+
+export function SearchMessages(arg1, arg2) {
+  return window['go']['main']['App']['SearchMessages'](arg1, arg2);
 }
 
 export function SearchPeople(arg1) {

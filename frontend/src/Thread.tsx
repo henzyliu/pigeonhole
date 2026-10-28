@@ -17,9 +17,14 @@ export default function Thread(props: {
     signedOut: boolean;
     onSignIn: () => void;
     onSetHidden: (hidden: boolean) => Promise<void>;
+    // A message to open the chat at (a search result), instead of the end.
+    jumpTo?: string;
 }) {
     const {chat} = props;
     const [messages, setMessages] = useState<inbox.Message[]>([]);
+    // The message to scroll to once loaded, and the one briefly highlighted.
+    const scrollTarget = useRef(props.jumpTo ?? '');
+    const [flashing, setFlashing] = useState('');
     // The message being typed starts from the chat's saved draft.
     const [draft, setDraft] = useState(chat.draft ?? '');
     const [replyTo, setReplyTo] = useState<inbox.Message | null>(null);
@@ -87,8 +92,21 @@ export default function Thread(props: {
     // while history loads) are coalesced.
     useEffect(() => {
         const timer = window.setTimeout(() => {
+            const first = !loadedOnce.current;
             loadedOnce.current = true;
-            refresh().catch(e => setError(errorText(e)));
+            // Opened at a search result: load back as far as it, and scroll there.
+            if (first && scrollTarget.current) {
+                stickToBottom.current = false;
+                Go.MessagesThrough(chat.roomId, scrollTarget.current).then(list => {
+                    setMessages(list ?? []);
+                    setHasMore(true);
+                }).catch(e => {
+                    scrollTarget.current = '';
+                    setError(errorText(e));
+                });
+            } else {
+                refresh().catch(e => setError(errorText(e)));
+            }
             Go.MarkRead(chat.roomId).catch(console.error);
         }, loadedOnce.current ? 200 : 0);
         return () => window.clearTimeout(timer);
@@ -146,6 +164,14 @@ export default function Thread(props: {
     useLayoutEffect(() => {
         const el = scroller.current;
         if (!el) return;
+        const target = scrollTarget.current && el.querySelector(`[data-event-id="${CSS.escape(scrollTarget.current)}"]`);
+        if (target) {
+            target.scrollIntoView({block: 'center'});
+            setFlashing(scrollTarget.current);
+            window.setTimeout(() => setFlashing(''), 2500);
+            scrollTarget.current = '';
+            return;
+        }
         if (restoreFrom.current !== null) {
             el.scrollTop = el.scrollHeight - restoreFrom.current;
             restoreFrom.current = null;
@@ -303,7 +329,7 @@ export default function Thread(props: {
                     return (
                         <Fragment key={m.eventId}>
                             {newDay && <div className="day-divider">{new Date(m.ts).toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'})}</div>}
-                            <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm}
+                            <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm} flash={m.eventId === flashing}
                                         isLatestMine={m.eventId === latestMine}
                                         replied={m.replyTo ? byId.get(m.replyTo) : undefined}
                                         onReply={() => startReply(m)} onReact={key => react(m, key)}
@@ -388,6 +414,7 @@ function snippet(m: inbox.Message): string {
 function MessageRow(props: {
     msg: inbox.Message;
     grouped: boolean;
+    flash?: boolean;
     showSender: boolean;
     isLatestMine: boolean;
     replied?: inbox.Message;
@@ -434,7 +461,8 @@ function MessageRow(props: {
     // fades in after a short hover (see .msg-actions), so the layout never
     // shifts and quick scrolling doesn't flash it.
     return (
-        <div className={`msg-row ${msg.isMe ? 'me' : 'them'} ${props.grouped ? 'grouped' : ''} ${picking ? 'picking' : ''}`}>
+        <div data-event-id={msg.eventId}
+             className={`msg-row ${msg.isMe ? 'me' : 'them'} ${props.grouped ? 'grouped' : ''} ${picking ? 'picking' : ''} ${props.flash ? 'flash' : ''}`}>
             {!msg.isMe && <div className="msg-avatar">{!props.grouped && <Avatar name={msg.senderName} src={msg.senderAvatar} size={28}/>}</div>}
             <div className="msg-col">
                 {props.showSender && !msg.isMe && !props.grouped && <div className="msg-sender">{msg.senderName}</div>}

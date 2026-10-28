@@ -34,6 +34,8 @@ export function MarkRead(arg1:string):Promise<void>;
 
 export function Messages(arg1:string,arg2:number,arg3:number):Promise<Array<inbox.Message>>;
 
+export function MessagesThrough(arg1:string,arg2:string):Promise<Array<inbox.Message>>;
+
 export function Networks():Promise<Array<inbox.LoginFlow>>;
 
 export function NotificationPermission():Promise<main.NotificationPermission>;
@@ -59,6 +61,8 @@ export function RetrySend(arg1:string,arg2:string):Promise<void>;
 export function SaveMedia(arg1:string,arg2:string):Promise<void>;
 
 export function SearchGIFs(arg1:string,arg2:number):Promise<Array<gifs.GIF>>;
+
+export function SearchMessages(arg1:string,arg2:number):Promise<Array<inbox.SearchResult>>;
 
 export function SearchPeople(arg1:string):Promise<Array<inbox.Person>>;
 

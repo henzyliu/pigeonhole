@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -516,4 +517,57 @@ func TestRetrySend(t *testing.T) {
 	if !has(withBody("noice")) {
 		t.Fatalf("the retried message should be there: %v", mine())
 	}
+}
+
+// Search finds text and captions (not file names), ignores case and LIKE
+// wildcards, skips deleted messages, and fills in the chat; jumping to a
+// result loads the chat back to it.
+func TestSearchMessages(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, send := newPortal(t, svc, "whatsapp")
+	start := time.Now().Add(-time.Hour)
+	send("Dinner at 7?", start)
+	for i := 0; i < 30; i++ {
+		send(fmt.Sprintf("filler %d", i), start.Add(time.Duration(i+1)*time.Minute))
+	}
+	send("100% sure about dinner", start.Add(40*time.Minute))
+	send("100 sure", start.Add(41*time.Minute))
+	got, err := svc.SearchMessages(ctx, "DINNER", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Body != "100% sure about dinner" || got[1].Body != "Dinner at 7?" {
+		t.Fatalf("results (newest first): %+v", got)
+	}
+	if r := got[0]; r.RoomID != string(roomID) || r.ChatName != "Bob" || r.SenderName != "Bob" || r.IsMe || r.Network != "whatsapp" {
+		t.Fatalf("result details: %+v", r)
+	}
+	if got, _ = svc.SearchMessages(ctx, "100%", 0); len(got) != 1 {
+		t.Fatalf("%% should be matched literally: %+v", got)
+	}
+	if got, _ = svc.SearchMessages(ctx, "d", 0); len(got) != 0 {
+		t.Fatalf("one letter shouldn't search: %+v", got)
+	}
+
+	msgs, err := svc.MessagesThrough(ctx, string(roomID), got0(t, svc, "Dinner at 7?"))
+	if err != nil || len(msgs) == 0 || msgs[0].Body != "Dinner at 7?" {
+		t.Fatalf("jumping should load back to the result: %d messages, first %q, %v", len(msgs), first(msgs), err)
+	}
+}
+
+func got0(t *testing.T, svc *Service, body string) string {
+	t.Helper()
+	r, err := svc.SearchMessages(context.Background(), body, 0)
+	if err != nil || len(r) == 0 {
+		t.Fatalf("no result for %q: %v", body, err)
+	}
+	return r[0].EventID
+}
+
+func first(msgs []Message) string {
+	if len(msgs) == 0 {
+		return ""
+	}
+	return msgs[0].Body
 }

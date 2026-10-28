@@ -366,6 +366,37 @@ export namespace inbox {
 	    }
 	}
 	
+	
+	export class SearchResult {
+	    roomId: string;
+	    eventId: string;
+	    chatName: string;
+	    chatAvatar: string;
+	    network: string;
+	    isDm: boolean;
+	    senderName: string;
+	    isMe: boolean;
+	    ts: number;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.roomId = source["roomId"];
+	        this.eventId = source["eventId"];
+	        this.chatName = source["chatName"];
+	        this.chatAvatar = source["chatAvatar"];
+	        this.network = source["network"];
+	        this.isDm = source["isDm"];
+	        this.senderName = source["senderName"];
+	        this.isMe = source["isMe"];
+	        this.ts = source["ts"];
+	        this.body = source["body"];
+	    }
+	}
 
 }
 

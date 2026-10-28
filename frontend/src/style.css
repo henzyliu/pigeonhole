@@ -681,3 +681,20 @@ kbd {
 .welcome-dots span.on { background: var(--accent); }
 @media (max-width: 480px) { .welcome-networks { grid-template-columns: 1fr; } .welcome-card { padding: 24px 18px 18px; } }
 .msg-status button.retry-send { font-size: inherit; padding: 0; color: inherit; text-decoration: underline; }
+
+/* Search: matching chats, then matching messages, in one scrolling list. */
+.search-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.search-scroll .chat-list { flex: none; overflow: visible; }
+.search-scroll .chat-list-empty { flex: none; padding: 8px 24px 12px; }
+.results-heading { font-size: 12px; font-weight: 600; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 10px 18px 4px; }
+.results-note { padding: 4px 18px; margin: 0; font-size: 13px; }
+.result-text { color: var(--fg-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-sender { color: var(--fg); }
+.result-text mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--fg); border-radius: 3px; padding: 0 1px; }
+.more-results { align-self: center; margin: 4px 0 12px; font-size: 13px; }
+/* The message a search result opened, briefly highlighted. */
+.msg-row.flash .bubble { animation: msg-flash 2.4s ease-out; }
+@keyframes msg-flash {
+    0%, 30% { box-shadow: 0 0 0 3px var(--accent); }
+    100% { box-shadow: 0 0 0 3px transparent; }
+}

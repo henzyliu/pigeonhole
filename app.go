@@ -260,6 +260,16 @@ func (a *App) UnsendMessage(roomID, eventID string) error {
 	return a.svc.UnsendMessage(a.ctx, roomID, eventID)
 }
 
+// SearchMessages finds messages containing the query, newest first.
+func (a *App) SearchMessages(query string, offset int) ([]inbox.SearchResult, error) {
+	return a.svc.SearchMessages(a.ctx, query, offset)
+}
+
+// MessagesThrough loads a chat back to a given message, to jump to it.
+func (a *App) MessagesThrough(roomID, eventID string) ([]inbox.Message, error) {
+	return a.svc.MessagesThrough(a.ctx, roomID, eventID)
+}
+
 // RetrySend sends a message that failed again (the Try again button).
 func (a *App) RetrySend(roomID, eventID string) error {
 	return a.svc.RetrySend(a.ctx, roomID, eventID)
