@@ -14,6 +14,10 @@ export function CancelLogin(arg1) {
   return window['go']['main']['App']['CancelLogin'](arg1);
 }
 
+export function ChatMembers(arg1) {
+  return window['go']['main']['App']['ChatMembers'](arg1);
+}
+
 export function ChatShared(arg1, arg2, arg3) {
   return window['go']['main']['App']['ChatShared'](arg1, arg2, arg3);
 }
@@ -146,8 +150,8 @@ export function SendPastedFile(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendPastedFile'](arg1, arg2, arg3);
 }
 
-export function SendText(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SendText'](arg1, arg2, arg3);
+export function SendText(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SendText'](arg1, arg2, arg3, arg4);
 }
 
 export function SetAccountNotifications(arg1, arg2, arg3) {

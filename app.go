@@ -210,8 +210,13 @@ func (a *App) Messages(roomID string, beforeTS int64, limit int) ([]inbox.Messag
 	return a.svc.Messages(a.ctx, roomID, beforeTS, limit)
 }
 
-func (a *App) SendText(roomID, text, replyTo string) error {
-	return a.svc.SendText(a.ctx, roomID, text, replyTo)
+func (a *App) SendText(roomID, text, replyTo string, mentions []inbox.Mention) error {
+	return a.svc.SendText(a.ctx, roomID, text, replyTo, mentions)
+}
+
+// ChatMembers lists who can be @mentioned in a chat.
+func (a *App) ChatMembers(roomID string) ([]inbox.Member, error) {
+	return a.svc.ChatMembers(a.ctx, roomID)
 }
 
 // SendFiles sends local files (from drag and drop) to a chat.

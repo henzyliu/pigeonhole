@@ -667,3 +667,38 @@ func TestSendGIFVideo(t *testing.T) {
 		t.Fatalf("chat network: %q, %v", network, err)
 	}
 }
+
+// Picked mentions become links to the person in the message's HTML (which
+// the bridges turn into real mentions), in order and escaped; text that no
+// longer has the "@Name" stays plain.
+func TestWithMentions(t *testing.T) {
+	c := &event.MessageEventContent{MsgType: event.MsgText, Body: "hey @Sam & @Jo Lee\n<3 @Sam"}
+	withMentions(c, []Mention{
+		{UserID: "@whatsapp_1:local", Name: "Sam"},
+		{UserID: "@whatsapp_2:local", Name: "Jo Lee"},
+		{UserID: "@whatsapp_1:local", Name: "Sam"},
+		{UserID: "@whatsapp_3:local", Name: "Gone"},
+	})
+	want := `hey <a href="https://matrix.to/#/@whatsapp_1:local">Sam</a> &amp; <a href="https://matrix.to/#/@whatsapp_2:local">Jo Lee</a><br>&lt;3 <a href="https://matrix.to/#/@whatsapp_1:local">Sam</a>`
+	if c.Format != event.FormatHTML || c.FormattedBody != want {
+		t.Fatalf("formatted body:\n got %s\nwant %s", c.FormattedBody, want)
+	}
+	if c.Mentions == nil || !slices.Equal(c.Mentions.UserIDs, []id.UserID{"@whatsapp_1:local", "@whatsapp_2:local"}) {
+		t.Fatalf("mentions: %+v", c.Mentions)
+	}
+	plain := &event.MessageEventContent{MsgType: event.MsgText, Body: "no one here"}
+	withMentions(plain, []Mention{{UserID: "@whatsapp_1:local", Name: "Sam"}})
+	if plain.Format != "" || plain.FormattedBody != "" || plain.Mentions != nil {
+		t.Fatalf("a message without mentions should stay plain: %+v", plain)
+	}
+}
+
+// Members are the other people in the chat, with names, not you.
+func TestChatMembers(t *testing.T) {
+	svc := newTestService(t)
+	roomID, _ := newPortal(t, svc, "whatsapp")
+	members, err := svc.ChatMembers(context.Background(), string(roomID))
+	if err != nil || len(members) != 1 || members[0].Name != "Bob" {
+		t.Fatalf("members: %+v, %v", members, err)
+	}
+}

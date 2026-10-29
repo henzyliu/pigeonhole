@@ -10,6 +10,8 @@ export function BrowserLogin(arg1:string):Promise<inbox.LoginStep>;
 
 export function CancelLogin(arg1:string):Promise<void>;
 
+export function ChatMembers(arg1:string):Promise<Array<inbox.Member>>;
+
 export function ChatShared(arg1:string,arg2:string,arg3:number):Promise<Array<inbox.Message>>;
 
 export function Chats():Promise<Array<inbox.Chat>>;
@@ -76,7 +78,7 @@ export function SendGIF(arg1:string,arg2:string):Promise<void>;
 
 export function SendPastedFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function SendText(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function SendText(arg1:string,arg2:string,arg3:string,arg4:Array<inbox.Mention>):Promise<void>;
 
 export function SetAccountNotifications(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 

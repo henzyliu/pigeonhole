@@ -692,8 +692,11 @@ func (s *Service) sendLocalID(ctx context.Context, roomID string, evtType event.
 	return evt.ID, nil
 }
 
-func (s *Service) SendText(ctx context.Context, roomID, text, replyTo string) error {
+// SendText sends a message; mentions are the people picked from the @
+// suggestions, written in the text as "@Name".
+func (s *Service) SendText(ctx context.Context, roomID, text, replyTo string, mentions []Mention) error {
 	content := &event.MessageEventContent{MsgType: event.MsgText, Body: text}
+	withMentions(content, mentions)
 	if replyTo != "" {
 		content.RelatesTo = (&event.RelatesTo{}).SetReplyTo(id.EventID(replyTo))
 	}

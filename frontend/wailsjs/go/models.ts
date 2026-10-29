@@ -247,6 +247,36 @@ export namespace inbox {
 		    return a;
 		}
 	}
+	export class Member {
+	    userId: string;
+	    name: string;
+	    avatar: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Member(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.userId = source["userId"];
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
+	    }
+	}
+	export class Mention {
+	    userId: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Mention(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.userId = source["userId"];
+	        this.name = source["name"];
+	    }
+	}
 	export class Reaction {
 	    key: string;
 	    count: number;

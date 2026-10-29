@@ -326,6 +326,64 @@ export default function Thread(props: {
     const unsend = (msg: inbox.Message) =>
         Go.UnsendMessage(chat.roomId, msg.eventId).catch(e => setError(errorText(e)));
 
+    // @mentions: typing @ suggests people in the chat; picked ones are sent
+    // as real mentions (see mentions.go), so they're tagged and notified.
+    const [members, setMembers] = useState<inbox.Member[] | null>(null);
+    const [suggest, setSuggest] = useState<{start: number; query: string} | null>(null);
+    const [suggestIndex, setSuggestIndex] = useState(0);
+    const picked = useRef<inbox.Mention[]>([]);
+    const suggestions = suggest && members
+        ? members.filter(m => {
+            const q = suggest.query.toLowerCase();
+            const name = m.name.toLowerCase();
+            return name.startsWith(q) || name.split(/\s+/).some(w => w.startsWith(q));
+        }).slice(0, 6)
+        : [];
+
+    // Looks for "@something" just before the cursor.
+    const checkMention = (el: HTMLTextAreaElement) => {
+        const caret = el.selectionStart ?? el.value.length;
+        const match = /(^|\s)@([^\s@]{0,30})$/.exec(el.value.slice(0, caret));
+        if (!match || editing) {
+            setSuggest(null);
+            return;
+        }
+        if (members === null) Go.ChatMembers(chat.roomId).then(m => setMembers(m ?? [])).catch(() => setMembers([]));
+        setSuggest({start: caret - match[2].length - 1, query: match[2]});
+        setSuggestIndex(0);
+    };
+
+    const pickMention = (m: inbox.Member) => {
+        const el = composer.current;
+        if (!suggest || !el) return;
+        const caret = el.selectionStart ?? draft.length;
+        const insert = '@' + m.name + ' ';
+        setDraft(draft.slice(0, suggest.start) + insert + draft.slice(caret));
+        picked.current.push({userId: m.userId, name: m.name});
+        setSuggest(null);
+        const at = suggest.start + insert.length;
+        window.setTimeout(() => {
+            el.focus();
+            el.setSelectionRange(at, at);
+        });
+    };
+
+    // mentionsIn lists the picked mentions still in the text, in the order
+    // they appear (each "@Name" once per time it's written).
+    const mentionsIn = (text: string): inbox.Mention[] => {
+        const found: {at: number; m: inbox.Mention}[] = [];
+        const seen = new Set<string>();
+        for (const m of picked.current) {
+            const token = '@' + m.name;
+            if (seen.has(m.userId + token)) continue;
+            seen.add(m.userId + token);
+            for (let at = text.indexOf(token); at >= 0; at = text.indexOf(token, at + token.length)) {
+                found.push({at, m});
+            }
+        }
+        return found.sort((a, b) => a.at - b.at).map(f => f.m);
+    };
+
     const send = async () => {
         if (editing) {
             saveEdit();
@@ -333,13 +391,16 @@ export default function Thread(props: {
         }
         const text = draft.trim();
         if (!text) return;
+        const mentions = mentionsIn(text);
         setDraft('');
+        setSuggest(null);
         pendingReply.current = '';
         setError('');
         stickToBottom.current = true;
         try {
-            await Go.SendText(chat.roomId, text, replyTo?.eventId ?? '');
+            await Go.SendText(chat.roomId, text, replyTo?.eventId ?? '', mentions);
             setReplyTo(null);
+            picked.current = [];
         } catch (e) {
             setDraft(text);
             setError(errorText(e));
@@ -347,6 +408,24 @@ export default function Thread(props: {
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+        if (suggestions.length > 0 && !e.nativeEvent.isComposing) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const n = suggestions.length;
+                setSuggestIndex(i => (i + (e.key === 'ArrowDown' ? 1 : -1) + n) % n);
+                return;
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                pickMention(suggestions[Math.min(suggestIndex, suggestions.length - 1)]);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setSuggest(null);
+                return;
+            }
+        }
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             send();
@@ -502,6 +581,22 @@ export default function Thread(props: {
             )}
             <div className="composer">
                 {pickingGif && <GifPicker onPick={sendGif} onClose={closeGifs}/>}
+                {suggestions.length > 0 && (
+                    <ul className="mention-suggest" role="listbox" aria-label="Mention someone">
+                        {suggestions.map((m, i) => (
+                            <li key={m.userId} role="option" aria-selected={i === suggestIndex}
+                                className={i === suggestIndex ? 'active' : ''}
+                                onMouseDown={e => {
+                                    e.preventDefault();
+                                    pickMention(m);
+                                }}
+                                onMouseEnter={() => setSuggestIndex(i)}>
+                                <Avatar name={m.name} src={m.avatar} size={24}/>
+                                <span>{m.name}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
                 <button className="icon-button attach" title="Send photos or files" onClick={attach}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l7.9-7.9"/>
@@ -512,7 +607,13 @@ export default function Thread(props: {
                             aria-label="Send a GIF" aria-expanded={pickingGif} onClick={() => setPickingGif(p => !p)}>GIF</button>
                 )}
                 <textarea ref={composer} rows={1} placeholder={editing ? 'Edit message' : `Message ${chat.name}`} value={draft}
-                          onChange={e => setDraft(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste} autoFocus/>
+                          onChange={e => {
+                              setDraft(e.target.value);
+                              checkMention(e.target);
+                          }}
+                          onClick={e => checkMention(e.currentTarget)}
+                          onBlur={() => setSuggest(null)}
+                          onKeyDown={onKeyDown} onPaste={onPaste} autoFocus/>
                 <button className="primary" onClick={send} disabled={!draft.trim()}>{editing ? 'Save' : 'Send'}</button>
             </div>
             {sharedOpen && (
