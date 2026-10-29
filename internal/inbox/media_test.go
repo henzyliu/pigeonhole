@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/png"
@@ -638,5 +639,31 @@ func TestChatShared(t *testing.T) {
 	}
 	if _, err := svc.ChatShared(ctx, string(roomID), "nope", 0); err == nil {
 		t.Fatal("unknown kinds should be refused")
+	}
+}
+
+// GIFs go to WhatsApp as an MP4 marked as a GIF, so it plays as a looping,
+// silent GIF there rather than as a video.
+func TestSendGIFVideo(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, _ := newPortal(t, svc, "whatsapp")
+	if err := svc.SendGIFVideo(ctx, string(roomID), []byte("pretend mp4"), 480, 270); err != nil {
+		t.Fatal(err)
+	}
+	var raw string
+	if err := svc.Store.DB.QueryRow("SELECT content FROM events WHERE room_id=? AND sender=?", roomID, Me).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var c event.MessageEventContent
+	if err := json.Unmarshal([]byte(raw), &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.MsgType != event.MsgVideo || c.Info == nil || !c.Info.MauGIF || c.Info.MimeType != "video/mp4" ||
+		c.Info.Width != 480 || c.Info.Height != 270 || c.URL == "" {
+		t.Fatalf("expected a GIF-marked MP4: %s", raw)
+	}
+	if network, err := svc.ChatNetwork(ctx, string(roomID)); err != nil || network != "whatsapp" {
+		t.Fatalf("chat network: %q, %v", network, err)
 	}
 }

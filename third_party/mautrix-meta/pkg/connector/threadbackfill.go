@@ -7,6 +7,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Pigeonhole: this file isn't in upstream mautrix-meta.
+
 // Sync groups that hold the thread list. Group 1 is the regular inbox, group
 // 95 holds end-to-end encrypted chats. The initial sync only fetches the first
 // page of each, so both need to be paged through.

@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -465,4 +466,47 @@ func TestReconnect(t *testing.T) {
 		t.Fatal("a second refresh straight away should be skipped")
 	}
 	time.Sleep(200 * time.Millisecond) // let the resets run
+}
+
+// After a wake-up, a network whose accounts all reconnected moments ago is
+// left alone (resetting it again made a message sent right then fail), but
+// one that's disconnected, or reconnected a while ago, is reset.
+func TestJustConnected(t *testing.T) {
+	svc := newTestService(t)
+	if svc.justConnected("discord") {
+		t.Fatal("a network with no accounts hasn't just connected")
+	}
+	state := func(id string, evt status.BridgeStateEvent) {
+		svc.onBridgeState("discord", status.BridgeState{StateEvent: evt, RemoteID: networkid.UserLoginID(id)})
+	}
+	state("a", status.StateConnected)
+	if !svc.justConnected("discord") {
+		t.Fatal("an account that just connected should count")
+	}
+	state("b", status.StateTransientDisconnect)
+	if svc.justConnected("discord") {
+		t.Fatal("one account still reconnecting means the network should be reset")
+	}
+	state("b", status.StateConnected)
+	svc.lock.Lock()
+	svc.connectedAt["discord/a"] = time.Now().Add(-time.Minute)
+	svc.lock.Unlock()
+	if svc.justConnected("discord") {
+		t.Fatal("an account that connected a minute ago doesn't count")
+	}
+	if svc.justConnected("messenger") {
+		t.Fatal("other networks aren't affected")
+	}
+}
+
+// HasChats tells a fresh install (no chats yet) from one in use.
+func TestHasChats(t *testing.T) {
+	svc := newTestService(t)
+	if svc.HasChats(context.Background()) {
+		t.Fatal("a new install has no chats")
+	}
+	newPortal(t, svc, "whatsapp")
+	if !svc.HasChats(context.Background()) {
+		t.Fatal("expected chats once one exists")
+	}
 }

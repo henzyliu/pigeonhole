@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rs/zerolog"
+
+	"unified-inbox/internal/inbox"
 )
 
 func TestSettingsRoundTrip(t *testing.T) {
@@ -72,5 +77,40 @@ func TestAccountNotifications(t *testing.T) {
 	}
 	if s = loadSettings(dir); len(s.MutedAccounts) != 0 {
 		t.Fatalf("expected no muted accounts: %+v", s.MutedAccounts)
+	}
+}
+
+// Settings saved before the welcome and the tabs option existed keep the
+// tabs and haven't finished the welcome; existing users still don't see it,
+// because they have chats. Turning tabs off is saved.
+func TestWelcomeAndTabsSettings(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := loadSettings(dir)
+	if s.SingleChatList || s.WelcomeDone {
+		t.Fatalf("old settings should keep tabs and an unfinished welcome: %+v", s)
+	}
+	svc, err := inbox.New(t.TempDir(), zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := NewApp(svc, dir, s, false)
+	a.ctx = context.Background()
+	if !a.ShowWelcome() {
+		t.Fatal("no chats and no finished welcome: show it")
+	}
+	if err = a.FinishWelcome(); err != nil || a.ShowWelcome() {
+		t.Fatalf("a finished welcome shouldn't show again (%v)", err)
+	}
+	if err = a.SetSeparateChats(false); err != nil {
+		t.Fatal(err)
+	}
+	if saved := loadSettings(dir); !saved.SingleChatList || !saved.WelcomeDone {
+		t.Fatalf("settings should be saved: %+v", saved)
+	}
+	if err = a.SetSeparateChats(true); err != nil || loadSettings(dir).SingleChatList {
+		t.Fatalf("turning tabs back on should be saved (%v)", err)
 	}
 }

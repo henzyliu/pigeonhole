@@ -30,9 +30,10 @@ signed with a paid developer certificate. You only need to get past it once:
 - **Windows:** if Windows says it protected your PC, click **More info** →
   **Run anyway**.
 
-Then click the person icon to connect your accounts. Pigeonhole keeps running in
-the menu bar (Mac) or by the clock (Windows) when you close its window, so you
-keep getting messages; quit it from that icon.
+A short welcome then walks you through connecting your accounts (you can add
+more later from the person icon). Pigeonhole keeps running in the menu bar
+(Mac) or by the clock (Windows) when you close its window, so you keep getting
+messages; quit it from that icon.
 
 **Updates install themselves:** when there's a new version, Pigeonhole tells you,
 and **Install update** in Settings downloads it and restarts the app. Your
@@ -41,7 +42,29 @@ the latest version once by hand.)
 
 Your messages stay on your computer. Connecting uses the same unofficial method
 as the mautrix bridges, which the networks don't officially allow, so there's a
-small risk of an account being asked to verify a login or being flagged.
+small risk of an account being asked to verify a login or being flagged. The
+only other service it talks to is GIPHY, and only while the GIF picker is open:
+GIPHY sees what you search for and your IP address, nothing from your chats.
+
+## What it does
+
+- **One inbox** for Messenger, Instagram, WhatsApp and Discord, with People,
+  Groups and Marketplace tabs (or one combined list) and message requests kept
+  apart.
+- **Everything you'd expect when chatting:** replies, reactions (with a full
+  emoji picker), photos, videos, files and voice messages, pasting images,
+  GIFs, link previews, typing indicators, read receipts, and editing or
+  unsending your messages.
+- **Search** across every chat, or within one (⌘F / Ctrl+F), jumping straight
+  to the message however far back it is.
+- **Shared panel:** every photo, video, file and link in a chat.
+- **Drafts** are kept per chat, even after quitting.
+- **Hide and mute** chats in Pigeonhole only, and choose which accounts send
+  notifications.
+- **Stays connected:** reconnects after the computer sleeps, has a Refresh
+  button (⌘R / Ctrl+R), retries messages that failed while reconnecting, and
+  tells you clearly if a network signs you out.
+- **Keyboard shortcuts** for most things (⌘/ or Ctrl+/ lists them).
 
 ## About this project
 
@@ -85,9 +108,18 @@ Found a security problem? Please report it privately; see
   deciding when the login is done is shared Go code.
 - **`frontend/`**: React + TypeScript UI, talking to Go through Wails bindings.
 - **`third_party/mautrix-meta`**: a local copy of mautrix-meta with small patches
-  (wired in via a `replace` in `go.mod`). Currently: the thread backfill also pages
-  through Messenger's end-to-end encrypted thread list (sync group 95), which
-  upstream only fetches the first page of. See `pkg/connector/threadbackfill.go`.
+  (wired in via a `replace` in `go.mod`), each marked with a `Pigeonhole:` comment:
+  - the thread backfill also pages through Messenger's end-to-end encrypted thread
+    list (sync group 95), which upstream only fetches the first page of
+    (`pkg/connector/threadbackfill.go`);
+  - voice messages from encrypted chats are kept as they arrive (Ogg/Opus) when
+    ffmpeg isn't available, instead of failing (`pkg/msgconv/from-whatsapp.go`);
+  - resetting connections (after sleep, or Refresh) skips signed-out accounts
+    instead of crashing on their missing clients (`pkg/connector/connector.go`,
+    `pkg/igconnector/connector.go`).
+- **No ffmpeg:** Pigeonhole doesn't ship ffmpeg, so media is kept in the format
+  the network sent. GIFs go to WhatsApp as GIPHY's MP4 version, which WhatsApp
+  plays as a looping GIF, rather than being converted.
 - **Discord**: [mautrix-discord](https://github.com/mautrix/discord)'s
   `bridgev2` rewrite (the `megadiscord` branch, not yet released upstream), pinned to one commit in
   `go.mod` along with the `beeper/discordgo` fork it needs. Its default config bridges
@@ -95,7 +127,7 @@ Found a security problem? Please report it privately; see
   token from discord.com) or a QR code scanned with the Discord app. Upgrading means
   picking a newer branch commit and checking it still builds against our mautrix.
 
-Adding another network (Slack, Discord, X, Telegram, ...) means adding its mautrix
+Adding another network (Slack, Signal, Telegram, ...) means adding its mautrix
 `bridgev2` connector in `inbox.New`; the UI picks it up automatically.
 
 Data lives in `~/Library/Application Support/Pigeonhole` (macOS) or
@@ -117,10 +149,14 @@ Run with hot reload:
 wails dev
 ```
 
-Run the backend tests:
+Run the backend tests, and type-check the frontend:
 
 ```bash
 go test . ./internal/...
+```
+
+```bash
+cd frontend && npx tsc --noEmit
 ```
 
 ## Building
@@ -144,12 +180,20 @@ scripts/build.sh windows
 The result, `build/bin/Pigeonhole.exe`, only needs DLLs that ship with Windows
 10 and 11 (plus WebView2, which they include).
 
+**GIFs** need a [GIPHY API key](https://developers.giphy.com) (choose "API",
+not an SDK). It's stamped in at build time so it isn't in the source:
+`scripts/build.sh` reads it from `$GIPHY_API_KEY` or a `.giphy-key` file in the
+repository root (ignored by git), and releases use the `GIPHY_API_KEY`
+repository secret (`gh secret set GIPHY_API_KEY`). A build without one works,
+just without the GIF button.
+
 ## Releasing
 
-To share a version, push a tag for it:
+To share a version, push a tag for it, matching `info.productVersion` in
+`wails.json` (here 0.23.0):
 
 ```bash
-git tag v0.10.3 && git push origin v0.10.3
+git tag -a v0.23.0 -m "Pigeonhole 0.23.0" && git push origin v0.23.0
 ```
 
 `.github/workflows/release.yml` then builds on GitHub's Mac and Windows
@@ -246,12 +290,16 @@ AGPL-3.0-or-later. Pigeonhole also includes or uses:
 | [Wails](https://github.com/wailsapp/wails) and [go-webview2](https://github.com/wailsapp/go-webview2) | The desktop app shell | MIT |
 | [go-sqlite3](https://github.com/mattn/go-sqlite3) | Local storage (SQLite) | MIT |
 | [React](https://react.dev) | The interface | MIT |
+| [emoji-mart](https://github.com/missive/emoji-mart) and its emoji data | The emoji picker | MIT |
 | [zerolog](https://github.com/rs/zerolog), [go-qrcode](https://github.com/skip2/go-qrcode), [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) | Logging, QR codes, image handling | MIT / MIT / BSD-3-Clause |
 
 Each project keeps its own copyright and licence (in its source, or in
 `third_party/` for the copied one). The `third_party/mautrix-meta/LICENSE.exceptions`
 file grants extra rights to Beeper only; it doesn't apply to Pigeonhole.
 
-Pigeonhole isn't affiliated with or endorsed by Meta, WhatsApp, Discord or the
-mautrix project. Messenger, Instagram, WhatsApp and Discord are trademarks of
+GIFs are searched and served by [GIPHY](https://giphy.com) under its API
+terms, which is why the picker says "Powered by GIPHY".
+
+Pigeonhole isn't affiliated with or endorsed by Meta, WhatsApp, Discord, GIPHY
+or the mautrix project. Messenger, Instagram, WhatsApp and Discord are trademarks of
 their owners.
