@@ -94,6 +94,8 @@ export function SetNotifications(arg1:boolean):Promise<void>;
 
 export function SetSeparateChats(arg1:boolean):Promise<void>;
 
+export function SetSpellCheck(arg1:boolean):Promise<void>;
+
 export function SetStartAtLogin(arg1:boolean):Promise<void>;
 
 export function SetTheme(arg1:string):Promise<void>;

@@ -43,6 +43,9 @@ type Settings struct {
 	// instead of separate tabs. Stored this way round so tabs are the
 	// default, including for settings saved before it existed.
 	SingleChatList bool `json:"singleChatList"`
+	// SpellCheckOff stops misspellings being underlined in the message box.
+	// Stored this way round so spell check is on by default.
+	SpellCheckOff bool `json:"spellCheckOff"`
 }
 
 func settingsPath(dir string) string { return filepath.Join(dir, "settings.json") }
@@ -173,6 +176,11 @@ func (a *App) SetAccountNotifications(network, loginID string, on bool) error {
 // before it had a welcome don't get one).
 func (a *App) ShowWelcome() bool {
 	return !a.GetSettings().WelcomeDone && !a.svc.HasChats(a.ctx)
+}
+
+// SetSpellCheck turns spell checking in the message box on or off.
+func (a *App) SetSpellCheck(on bool) error {
+	return a.updateSettings(func(s *Settings) { s.SpellCheckOff = !on })
 }
 
 // SetSeparateChats turns the People / Groups / Marketplace tabs on or off.

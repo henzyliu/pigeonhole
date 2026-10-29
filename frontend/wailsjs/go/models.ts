@@ -455,6 +455,7 @@ export namespace main {
 	    backgroundNoticeShown: boolean;
 	    welcomeDone: boolean;
 	    singleChatList: boolean;
+	    spellCheckOff: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -470,6 +471,7 @@ export namespace main {
 	        this.backgroundNoticeShown = source["backgroundNoticeShown"];
 	        this.welcomeDone = source["welcomeDone"];
 	        this.singleChatList = source["singleChatList"];
+	        this.spellCheckOff = source["spellCheckOff"];
 	    }
 	}
 	export class StartAtLogin {

@@ -38,6 +38,7 @@ func main() {
 	app := NewApp(svc, dir, settings, background)
 	backgroundColour, macOptions, windowsOptions := windowAppearance(settings.Theme)
 
+	enableSpellChecking()
 	err = wails.Run(&options.App{
 		Title:     "Pigeonhole",
 		Width:     1180,
@@ -62,6 +63,10 @@ func main() {
 		},
 		Mac:     macOptions,
 		Windows: windowsOptions,
+		// The right-click menu shows only where it's useful: in text boxes
+		// (with spelling suggestions) and on selected text, so you can copy
+		// it. See --default-contextmenu in the Wails runtime.
+		EnableDefaultContextMenu: true,
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,

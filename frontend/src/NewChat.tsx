@@ -56,7 +56,7 @@ export default function NewChat(props: {onClose: () => void; onOpened: (roomId: 
                     <h2>New chat</h2>
                     <button className="icon-button" onClick={props.onClose}>✕</button>
                 </div>
-                <input className="search modal-search" placeholder="Search people by name" value={query}
+                <input className="search modal-search" spellCheck={false} placeholder="Search people by name" value={query}
                        onChange={e => setQuery(e.target.value)} autoFocus/>
                 {error && <div className="banner error">{error}</div>}
                 <ul className="people-list">

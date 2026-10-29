@@ -128,6 +128,8 @@ export default function App() {
     // Whether People, Groups and Marketplace are separate tabs (the default)
     // or one list. Message requests stay apart either way.
     const [separateTabs, setSeparateTabs] = useState(true);
+    // Whether misspellings are underlined in the message box.
+    const [spellCheck, setSpellCheck] = useState(true);
     const updateStatus = useUpdateStatus();
 
     // The saved setting wins over the early copy index.html applied.
@@ -137,6 +139,7 @@ export default function App() {
             applyTheme(t);
             setTheme(t);
             setSeparateTabs(!s?.singleChatList);
+            setSpellCheck(!s?.spellCheckOff);
         }).catch(console.error);
     }, []);
     const [startError, setStartError] = useState('');
@@ -386,6 +389,7 @@ export default function App() {
                     ref={searchRef}
                     className="search"
                     placeholder={`Search (${MOD}K)`}
+                    spellCheck={false}
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     onKeyDown={onSearchKey}
@@ -476,7 +480,7 @@ export default function App() {
                 {selectedChat
                     ? <Thread key={selectedChat.roomId + (jump?.roomId === selectedChat.roomId ? ':' + jump.seq : '')}
                               jumpTo={jump?.roomId === selectedChat.roomId ? jump.eventId : undefined}
-                              chat={selectedChat} tick={messageTick}
+                              chat={selectedChat} tick={messageTick} spellCheck={spellCheck}
                               typing={typing[selectedChat.roomId] ?? NO_ONE}
                               signedOut={signedOutOf(accounts, selectedChat.network)}
                               onSignIn={() => openSignIn(selectedChat.network)}
@@ -490,6 +494,7 @@ export default function App() {
             {showNewChat && <NewChat onClose={() => setShowNewChat(false)} onOpened={openNewChat}/>}
             {showSettings && <Settings theme={theme} onTheme={setTheme} onClose={() => setShowSettings(false)}
                                        onSeparateTabs={setSeparateTabs}
+                                       onSpellCheck={setSpellCheck}
                                        onShowShortcuts={() => {
                                            setShowSettings(false);
                                            setShowShortcuts(true);

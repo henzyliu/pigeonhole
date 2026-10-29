@@ -16,6 +16,7 @@ export default function Thread(props: {
     chat: inbox.Chat;
     tick: number;
     typing: string[];
+    spellCheck?: boolean;
     signedOut: boolean;
     onSignIn: () => void;
     onSetHidden: (hidden: boolean) => Promise<void>;
@@ -508,7 +509,7 @@ export default function Thread(props: {
             </header>
             {findOpen && (
                 <div className="find-bar">
-                    <input ref={findInput} className="search" placeholder={`Search in ${chat.name || 'this chat'}`}
+                    <input ref={findInput} className="search" spellCheck={false} placeholder={`Search in ${chat.name || 'this chat'}`}
                            value={findQuery} onChange={e => setFindQuery(e.target.value)} onKeyDown={onFindKey}/>
                     <span className="find-count">
                         {findQuery.trim() && (matches.length
@@ -606,7 +607,7 @@ export default function Thread(props: {
                     <button className={`icon-button gif-button ${pickingGif ? 'active' : ''}`} title="Send a GIF"
                             aria-label="Send a GIF" aria-expanded={pickingGif} onClick={() => setPickingGif(p => !p)}>GIF</button>
                 )}
-                <textarea ref={composer} rows={1} placeholder={editing ? 'Edit message' : `Message ${chat.name}`} value={draft}
+                <textarea ref={composer} rows={1} spellCheck={props.spellCheck ?? true} placeholder={editing ? 'Edit message' : `Message ${chat.name}`} value={draft}
                           onChange={e => {
                               setDraft(e.target.value);
                               checkMention(e.target);

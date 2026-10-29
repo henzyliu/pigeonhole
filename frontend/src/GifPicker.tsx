@@ -75,7 +75,7 @@ export default function GifPicker(props: {onPick: (gif: gifs.GIF) => void; onClo
 
     return (
         <div ref={ref} className="gif-picker" role="dialog" aria-label="Send a GIF">
-            <input className="search" autoFocus placeholder="Search GIPHY" value={query}
+            <input className="search" autoFocus spellCheck={false} placeholder="Search GIPHY" value={query}
                    onChange={e => setQuery(e.target.value)}/>
             <div className="gif-grid" onScroll={onScroll}>
                 {columns.map((col, i) => (

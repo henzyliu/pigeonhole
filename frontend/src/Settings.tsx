@@ -12,7 +12,7 @@ const THEMES: {id: Theme; label: string}[] = [
     {id: 'dark', label: 'Dark'},
 ];
 
-export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void; onShowWelcome: () => void; onSeparateTabs: (on: boolean) => void}) {
+export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => void; onClose: () => void; onShowShortcuts: () => void; onShowWelcome: () => void; onSeparateTabs: (on: boolean) => void; onSpellCheck: (on: boolean) => void}) {
     useCloseOnEscape(props.onClose);
     const [error, setError] = useState('');
     const [version, setVersion] = useState<main.VersionInfo | null>(null);
@@ -127,6 +127,22 @@ export default function Settings(props: {theme: Theme; onTheme: (t: Theme) => vo
                                     props.onSeparateTabs(on);
                                     setPref({singleChatList: !on}, () => Go.SetSeparateChats(on).catch(e => {
                                         props.onSeparateTabs(!on);
+                                        throw e;
+                                    }));
+                                }}/>
+                    </div>
+                    <div className="setting">
+                        <div>
+                            <div className="setting-label">Spell check</div>
+                            <div className="muted setting-hint">
+                                Underline misspellings as you type. Right-click one for suggestions.
+                            </div>
+                        </div>
+                        <Switch label="Spell check" on={!prefs.spellCheckOff}
+                                onChange={on => {
+                                    props.onSpellCheck(on);
+                                    setPref({spellCheckOff: !on}, () => Go.SetSpellCheck(on).catch(e => {
+                                        props.onSpellCheck(!on);
                                         throw e;
                                     }));
                                 }}/>

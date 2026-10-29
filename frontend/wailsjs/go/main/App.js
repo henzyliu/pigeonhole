@@ -182,6 +182,10 @@ export function SetSeparateChats(arg1) {
   return window['go']['main']['App']['SetSeparateChats'](arg1);
 }
 
+export function SetSpellCheck(arg1) {
+  return window['go']['main']['App']['SetSpellCheck'](arg1);
+}
+
 export function SetStartAtLogin(arg1) {
   return window['go']['main']['App']['SetStartAtLogin'](arg1);
 }
