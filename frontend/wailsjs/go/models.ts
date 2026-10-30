@@ -84,6 +84,7 @@ export namespace inbox {
 	    mutedOnNetwork: boolean;
 	    draft: string;
 	    draftReply: string;
+	    pinned: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -109,6 +110,7 @@ export namespace inbox {
 	        this.mutedOnNetwork = source["mutedOnNetwork"];
 	        this.draft = source["draft"];
 	        this.draftReply = source["draftReply"];
+	        this.pinned = source["pinned"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

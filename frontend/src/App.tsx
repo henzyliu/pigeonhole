@@ -298,7 +298,7 @@ export default function App() {
             if (filter === 'unread' && c.unread === 0) return false;
             if (filter !== 'all' && filter !== 'unread' && c.network !== filter) return false;
             return !q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q);
-        });
+        }).sort((a, b) => q ? 0 : Number(b.pinned) - Number(a.pinned)); // pinned first; otherwise newest first, as loaded
     }, [chats, category, filter, query, showHidden, separateTabs]);
     visibleRef.current = visibleChats;
 
@@ -452,7 +452,8 @@ export default function App() {
                         <ChatList chats={visibleChats} selected={selected} highlighted={highlighted} onSelect={setSelected}
                                   emptyText={query.trim() ? 'No chats match.' : emptyText} typing={typing}
                                   onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
-                                  onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}/>
+                                  onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}
+                                  onSetPinned={(roomId, pinned) => Go.SetChatPinned(roomId, pinned).then(loadChats).catch(console.error)}/>
                     );
                     // While searching, matching messages follow the matching chats.
                     return query.trim() ? (

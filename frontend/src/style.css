@@ -157,6 +157,7 @@ a { color: inherit; }
 
 .chat-list { list-style: none; margin: 0; padding: 0 8px 8px; overflow-y: auto; flex: 1; }
 .chat-muted { flex-shrink: 0; color: var(--fg-muted); margin-left: -4px; }
+.chat-pinned { flex-shrink: 0; color: var(--fg-muted); margin-left: -4px; }
 .badge.badge-muted { background: var(--fg-muted); }
 /* Right-click menu on a chat */
 .context-menu {

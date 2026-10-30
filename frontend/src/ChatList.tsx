@@ -11,6 +11,7 @@ export default function ChatList(props: {
     onSelect: (roomId: string) => void;
     onSetHidden: (roomId: string, hidden: boolean) => void;
     onSetMuted: (roomId: string, muted: boolean) => void;
+    onSetPinned: (roomId: string, pinned: boolean) => void;
     emptyText: string;
     typing: Record<string, string[]>;
 }) {
@@ -40,6 +41,7 @@ export default function ChatList(props: {
                         <div className="chat-row-top">
                             <span className="chat-name">{chat.name || 'Unnamed chat'}</span>
                             {(chat.muted || chat.mutedOnNetwork) && <MutedIcon chat={chat}/>}
+                            {chat.pinned && <PinIcon/>}
                             <span className="chat-time">{formatTime(chat.lastTs)}</span>
                         </div>
                         <div className="chat-row-bottom">
@@ -69,6 +71,9 @@ export default function ChatList(props: {
         </ul>
         {menu && (
             <ContextMenu x={menu.x} y={menu.y} alignRight onClose={() => setMenu(null)} items={[{
+                label: menu.chat.pinned ? 'Unpin chat' : 'Pin chat',
+                onClick: () => props.onSetPinned(menu.chat.roomId, !menu.chat.pinned),
+            }, {
                 label: menu.chat.muted ? 'Unmute chat' : 'Mute chat',
                 onClick: () => props.onSetMuted(menu.chat.roomId, !menu.chat.muted),
             }, {
@@ -179,6 +184,17 @@ function plainPreview(text: string): string {
 
 // Shown beside a muted chat's name: muted in Pigeonhole (⋯ → Mute), or in
 // the network's own app, which Pigeonhole follows.
+function PinIcon() {
+    return (
+        <svg className="chat-pinned" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="Pinned">
+            <title>Pinned</title>
+            <path d="M12 17v5"/>
+            <path d="M9 10.8V4h6v6.8l3 3.2H6z"/>
+        </svg>
+    );
+}
+
 function MutedIcon({chat}: {chat: inbox.Chat}) {
     const where = chat.muted ? 'Muted in Pigeonhole' : `Muted in ${NETWORK_LABELS[chat.network] ?? chat.network}`;
     return (

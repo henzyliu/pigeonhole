@@ -166,6 +166,10 @@ export function SetChatMuted(arg1, arg2) {
   return window['go']['main']['App']['SetChatMuted'](arg1, arg2);
 }
 
+export function SetChatPinned(arg1, arg2) {
+  return window['go']['main']['App']['SetChatPinned'](arg1, arg2);
+}
+
 export function SetDraft(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetDraft'](arg1, arg2, arg3);
 }

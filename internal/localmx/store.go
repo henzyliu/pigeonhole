@@ -43,7 +43,9 @@ CREATE TABLE IF NOT EXISTS rooms (
 	-- draft is an unsent message typed in Pigeonhole, and draft_reply the
 	-- event it replies to, if any.
 	draft       TEXT NOT NULL DEFAULT '',
-	draft_reply TEXT NOT NULL DEFAULT ''
+	draft_reply TEXT NOT NULL DEFAULT '',
+	-- pinned_ts is when the chat was pinned in Pigeonhole (0: not pinned).
+	pinned_ts   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS members (
 	room_id    TEXT NOT NULL,
@@ -140,6 +142,9 @@ func OpenStore(dataDir string, me id.UserID) (*Store, error) {
 	}
 	if err = addColumn(db, "rooms", "hidden_ts", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return nil, fmt.Errorf("failed to add hidden chats: %w", err)
+	}
+	if err = addColumn(db, "rooms", "pinned_ts", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return nil, fmt.Errorf("failed to add pinned chats: %w", err)
 	}
 	if err = addColumn(db, "rooms", "local_muted", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return nil, fmt.Errorf("failed to add muted chats: %w", err)
@@ -601,6 +606,20 @@ func (s *Store) SetDraft(ctx context.Context, roomID id.RoomID, text string, rep
 // SetLocalMuted mutes a chat in Pigeonhole only, or unmutes it.
 func (s *Store) SetLocalMuted(ctx context.Context, roomID id.RoomID, muted bool) error {
 	_, err := s.DB.ExecContext(ctx, "UPDATE rooms SET local_muted=? WHERE room_id=?", muted, roomID)
+	if err == nil {
+		s.notify("rooms", roomID)
+	}
+	return err
+}
+
+// SetPinned pins a chat to the top of the list in Pigeonhole only, or
+// unpins it.
+func (s *Store) SetPinned(ctx context.Context, roomID id.RoomID, pinned bool) error {
+	var ts int64
+	if pinned {
+		ts = time.Now().UnixMilli()
+	}
+	_, err := s.DB.ExecContext(ctx, "UPDATE rooms SET pinned_ts=? WHERE room_id=?", ts, roomID)
 	if err == nil {
 		s.notify("rooms", roomID)
 	}

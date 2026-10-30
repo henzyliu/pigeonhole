@@ -718,3 +718,27 @@ func TestUnsupportedMessage(t *testing.T) {
 		t.Fatalf("an ordinary notice isn't unsupported: %+v", plain)
 	}
 }
+
+// Pinning is saved with the chat and can be undone.
+func TestPinnedChat(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+	roomID, _ := newPortal(t, svc, "whatsapp")
+	pinned := func() bool {
+		t.Helper()
+		chats, err := svc.Chats(ctx)
+		if err != nil || len(chats) != 1 {
+			t.Fatalf("chats: %+v, %v", chats, err)
+		}
+		return chats[0].Pinned
+	}
+	if pinned() {
+		t.Fatal("chats start unpinned")
+	}
+	if err := svc.SetPinned(ctx, string(roomID), true); err != nil || !pinned() {
+		t.Fatalf("pinning should stick (%v)", err)
+	}
+	if err := svc.SetPinned(ctx, string(roomID), false); err != nil || pinned() {
+		t.Fatalf("unpinning should stick (%v)", err)
+	}
+}

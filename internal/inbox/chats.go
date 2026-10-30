@@ -52,6 +52,8 @@ type Chat struct {
 	// message it replies to; both stay on this computer.
 	Draft      string `json:"draft"`
 	DraftReply string `json:"draftReply"`
+	// Pinned chats stay at the top of the list (in Pigeonhole only).
+	Pinned bool `json:"pinned"`
 }
 
 type Reaction struct {
@@ -191,7 +193,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 	}
 	rows, err := s.Store.DB.QueryContext(ctx, `
 		SELECT room_id, network, name, avatar, preview, last_ts, unread, is_dm, `+localmx.HiddenClause+`,
-			local_muted, `+localmx.NetworkMutedClause+`, draft, draft_reply
+			local_muted, `+localmx.NetworkMutedClause+`, draft, draft_reply, pinned_ts > 0
 		FROM rooms WHERE is_portal=1 ORDER BY last_ts DESC`)
 	if err != nil {
 		return nil, err
@@ -201,7 +203,7 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		var c Chat
 		var avatar string
 		if err = rows.Scan(&c.RoomID, &c.Network, &c.Name, &avatar, &c.Preview, &c.LastTS, &c.Unread, &c.IsDM, &c.Hidden,
-			&c.Muted, &c.MutedOnNetwork, &c.Draft, &c.DraftReply); err != nil {
+			&c.Muted, &c.MutedOnNetwork, &c.Draft, &c.DraftReply, &c.Pinned); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -765,6 +767,11 @@ func (s *Service) SetDraft(ctx context.Context, roomID, text, replyTo string) er
 // network), or unmutes it.
 func (s *Service) SetMuted(ctx context.Context, roomID string, muted bool) error {
 	return s.Store.SetLocalMuted(ctx, id.RoomID(roomID), muted)
+}
+
+// SetPinned pins a chat to the top of the list, in Pigeonhole only.
+func (s *Service) SetPinned(ctx context.Context, roomID string, pinned bool) error {
+	return s.Store.SetPinned(ctx, id.RoomID(roomID), pinned)
 }
 
 // SetHidden hides a chat in Pigeonhole only; nothing changes on the network.

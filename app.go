@@ -322,6 +322,11 @@ func (a *App) SetChatMuted(roomID string, muted bool) error {
 	return a.svc.SetMuted(a.ctx, roomID, muted)
 }
 
+// SetChatPinned pins a chat to the top of the list (in Pigeonhole only).
+func (a *App) SetChatPinned(roomID string, pinned bool) error {
+	return a.svc.SetPinned(a.ctx, roomID, pinned)
+}
+
 // SetChatHidden hides a chat from the list (until a new message arrives) or
 // brings it back.
 func (a *App) SetChatHidden(roomID string, hidden bool) error {
