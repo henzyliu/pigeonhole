@@ -88,6 +88,11 @@ type Message struct {
 	Fetchable string `json:"fetchable"`
 	// Previews are the link previews the network sent with the message.
 	Previews []LinkPreview `json:"previews"`
+	// Unsupported is set on a placeholder for something the bridge
+	// couldn't read (e.g. a Marketplace listing card), with OpenURL, if it
+	// gave one, to see it on the network's website.
+	Unsupported bool   `json:"unsupported"`
+	OpenURL     string `json:"openUrl"`
 	// Pending is an edit or unsend of this message waiting for the network
 	// ("edit" or "unsend"); a pending edit's new text is already in Body.
 	// ChangeFailed is the last one the network refused.
@@ -410,6 +415,15 @@ func fillContent(m *Message, evtType, raw string) {
 	}
 	if m.Kind == "text" || m.Kind == "notice" {
 		m.Previews = linkPreviews(msg.BeeperLinkPreviews)
+	}
+	if unsupported, _ := content.Raw["fi.mau.unsupported"].(bool); unsupported {
+		m.Unsupported = true
+		for _, field := range strings.Fields(m.Body) {
+			if strings.HasPrefix(field, "https://") {
+				m.OpenURL = field
+				break
+			}
+		}
 	}
 	if _, unresolved := content.Raw[unresolvedMediaKey]; unresolved {
 		link, _ := content.Raw["external_url"].(string)

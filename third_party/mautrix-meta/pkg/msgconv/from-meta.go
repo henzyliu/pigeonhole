@@ -233,6 +233,18 @@ func (mc *MessageConverter) ToMatrix(
 		})
 	}
 	if len(cm.Parts) == 0 {
+		// Pigeonhole: record what Meta sent (in the local log only) so these
+		// can be understood and shown properly later. Marketplace chats start
+		// with two of them, probably the listing card and a "started a chat"
+		// notice.
+		if raw, err := json.Marshal(msg); err == nil {
+			const maxLogged = 16 << 10
+			if len(raw) > maxLogged {
+				raw = raw[:maxLogged]
+			}
+			zerolog.Ctx(ctx).Info().Str("message_id", string(messageID)).Str("raw_message", string(raw)).
+				Msg("Unsupported message from Meta")
+		}
 		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{

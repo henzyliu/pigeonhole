@@ -33,7 +33,8 @@ func (s *Service) ChatShared(ctx context.Context, roomID, kind string, offset in
 	}
 	rows, err := s.Store.DB.QueryContext(ctx, `
 		SELECT event_id, sender, type, content, ts FROM events
-		WHERE room_id=? AND type='m.room.message' AND redacted=0 AND `+filter+`
+		WHERE room_id=? AND type='m.room.message' AND redacted=0
+			AND json_extract(content, '$."fi.mau.unsupported"') IS NULL AND `+filter+`
 		ORDER BY ts DESC LIMIT ? OFFSET ?`, roomID, SharedPageSize, offset)
 	if err != nil {
 		return nil, err

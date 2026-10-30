@@ -532,10 +532,23 @@ export default function Thread(props: {
                 {messages.map((m, i) => {
                     const prev = messages[i - 1];
                     const newDay = !prev || new Date(prev.ts).toDateString() !== new Date(m.ts).toDateString();
-                    const grouped = !newDay && prev && prev.isMe === m.isMe && prev.senderName === m.senderName && m.ts - prev.ts < 5 * 60_000;
+                    const grouped = !newDay && prev && !prev.unsupported && prev.isMe === m.isMe && prev.senderName === m.senderName && m.ts - prev.ts < 5 * 60_000;
+                    const day = newDay && <div className="day-divider">{new Date(m.ts).toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'})}</div>;
+                    // Things the bridge couldn't read show as one quiet line
+                    // (a run of them, like a Marketplace chat's opening pair,
+                    // as just one).
+                    if (m.unsupported && !m.redacted) {
+                        if (!newDay && prev?.unsupported && prev.openUrl === m.openUrl) return null;
+                        return (
+                            <Fragment key={m.eventId}>
+                                {day}
+                                <UnsupportedLine msg={m} marketplace={chat.category === 'marketplace'}/>
+                            </Fragment>
+                        );
+                    }
                     return (
                         <Fragment key={m.eventId}>
-                            {newDay && <div className="day-divider">{new Date(m.ts).toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'})}</div>}
+                            {day}
                             <MessageRow msg={m} grouped={!!grouped} showSender={!chat.isDm} flash={m.eventId === flashing}
                                         highlight={findHighlight}
                                         isLatestMine={m.eventId === latestMine}
@@ -639,6 +652,27 @@ function readBase64(file: File): Promise<string> {
         reader.onerror = () => reject(reader.error ?? new Error('Couldn\'t read the pasted file'));
         reader.readAsDataURL(file);
     });
+}
+
+// UnsupportedLine stands in for something the bridge couldn't read, with
+// a link to see it on the network's website.
+function UnsupportedLine({msg, marketplace}: {msg: inbox.Message; marketplace: boolean}) {
+    const site = !msg.openUrl ? ''
+        : msg.openUrl.includes('instagram.com') ? 'Instagram'
+            : msg.openUrl.includes('messenger.com') ? 'Messenger'
+                : msg.openUrl.includes('facebook.com') ? 'Facebook' : 'the app';
+    return (
+        <div className="unsupported-line" title={new Date(msg.ts).toLocaleString()}>
+            {marketplace ? 'Marketplace listing' : 'A message Pigeonhole can\'t show yet'}
+            {msg.openUrl && <>
+                {' · '}
+                <a href={msg.openUrl} onClick={e => {
+                    e.preventDefault();
+                    openLink(msg.openUrl);
+                }}>{marketplace ? 'View' : 'Open'} on {site}</a>
+            </>}
+        </div>
+    );
 }
 
 function snippet(m: inbox.Message): string {

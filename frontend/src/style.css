@@ -269,6 +269,9 @@ button.thread-hide:hover { color: var(--fg); }
 .thread-subtitle { font-size: 12px; color: var(--fg-muted); display: flex; align-items: center; gap: 5px; }
 .messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px 20px 8px; user-select: text; }
 .day-divider { text-align: center; color: var(--fg-muted); font-size: 12px; margin: 18px 0 10px; }
+/* A placeholder for something the bridge couldn't read. */
+.unsupported-line { text-align: center; color: var(--fg-muted); font-size: 12.5px; margin: 10px 0; }
+.unsupported-line a { color: var(--accent); }
 
 .msg-row { display: flex; gap: 8px; margin-top: 10px; }
 .msg-row.grouped { margin-top: 2px; }

@@ -702,3 +702,19 @@ func TestChatMembers(t *testing.T) {
 		t.Fatalf("members: %+v, %v", members, err)
 	}
 }
+
+// Placeholders for messages the bridge couldn't read are marked, with the
+// link it gives to see them on the network's website.
+func TestUnsupportedMessage(t *testing.T) {
+	m := &Message{}
+	fillContent(m, "m.room.message", `{"msgtype":"m.notice","fi.mau.unsupported":true,
+		"body":"Unsupported message\n\nOpen in Facebook: https://www.facebook.com/messages/t/123/"}`)
+	if !m.Unsupported || m.OpenURL != "https://www.facebook.com/messages/t/123/" {
+		t.Fatalf("unsupported: %+v", m)
+	}
+	plain := &Message{}
+	fillContent(plain, "m.room.message", `{"msgtype":"m.notice","body":"Someone left"}`)
+	if plain.Unsupported || plain.OpenURL != "" {
+		t.Fatalf("an ordinary notice isn't unsupported: %+v", plain)
+	}
+}

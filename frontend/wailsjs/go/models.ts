@@ -315,6 +315,8 @@ export namespace inbox {
 	    seenBy: Reader[];
 	    fetchable: string;
 	    previews: LinkPreview[];
+	    unsupported: boolean;
+	    openUrl: string;
 	    pending: string;
 	    changeFailed: string;
 	    canEdit: boolean;
@@ -347,6 +349,8 @@ export namespace inbox {
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
 	        this.fetchable = source["fetchable"];
 	        this.previews = this.convertValues(source["previews"], LinkPreview);
+	        this.unsupported = source["unsupported"];
+	        this.openUrl = source["openUrl"];
 	        this.pending = source["pending"];
 	        this.changeFailed = source["changeFailed"];
 	        this.canEdit = source["canEdit"];

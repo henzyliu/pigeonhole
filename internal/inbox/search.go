@@ -90,6 +90,7 @@ func (s *Service) searchRows(ctx context.Context, query, roomID string, limit, o
 		SELECT e.event_id, e.room_id, e.sender, e.ts, json_extract(e.content, '$.body') AS body
 		FROM events e JOIN rooms r ON r.room_id = e.room_id AND r.is_portal = 1
 		WHERE e.type = 'm.room.message' AND e.redacted = 0 AND (? = '' OR e.room_id = ?)
+			AND json_extract(e.content, '$."fi.mau.unsupported"') IS NULL
 			AND (json_extract(e.content, '$.msgtype') IN ('m.text', 'm.notice', 'm.emote')
 				-- a photo or video's body is its caption when it has a separate file name
 				OR (json_extract(e.content, '$.filename') IS NOT NULL
