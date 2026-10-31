@@ -639,8 +639,14 @@ func (s *Store) Mute(ctx context.Context, roomID id.RoomID, until time.Time) err
 	if !until.IsZero() {
 		ts = until.UnixMilli()
 	}
-	_, err := s.DB.ExecContext(ctx, "UPDATE rooms SET muted_until=? WHERE room_id=?", ts, roomID)
-	return err
+	res, err := s.DB.ExecContext(ctx, "UPDATE rooms SET muted_until=? WHERE room_id=? AND muted_until<>?", ts, roomID, ts)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		s.notify("rooms", roomID)
+	}
+	return nil
 }
 
 func (s *Store) GetEvent(ctx context.Context, eventID id.EventID) (*event.Event, error) {

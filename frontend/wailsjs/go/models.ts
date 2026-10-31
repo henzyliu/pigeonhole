@@ -82,6 +82,7 @@ export namespace inbox {
 	    historyLoading: boolean;
 	    muted: boolean;
 	    mutedOnNetwork: boolean;
+	    canMuteOnNetwork: boolean;
 	    draft: string;
 	    draftReply: string;
 	    pinned: boolean;
@@ -108,6 +109,7 @@ export namespace inbox {
 	        this.historyLoading = source["historyLoading"];
 	        this.muted = source["muted"];
 	        this.mutedOnNetwork = source["mutedOnNetwork"];
+	        this.canMuteOnNetwork = source["canMuteOnNetwork"];
 	        this.draft = source["draft"];
 	        this.draftReply = source["draftReply"];
 	        this.pinned = source["pinned"];

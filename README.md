@@ -61,8 +61,9 @@ GIPHY sees what you search for and your IP address, nothing from your chats.
   to the message however far back it is.
 - **Shared panel:** every photo, video, file and link in a chat.
 - **Drafts** are kept per chat, even after quitting.
-- **Hide and mute** chats in Pigeonhole only, and choose which accounts send
-  notifications.
+- **Mute** chats, on the network itself for Discord, WhatsApp and Instagram (so
+  it matches their apps) and in Pigeonhole for Messenger and Google Messages;
+  **hide** chats in Pigeonhole only; and choose which accounts send notifications.
 - **Stays connected:** reconnects after the computer sleeps, has a Refresh
   button (⌘R / Ctrl+R), retries messages that failed while reconnecting, and
   tells you clearly if a network signs you out.

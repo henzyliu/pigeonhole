@@ -75,8 +75,8 @@ export default function ChatList(props: {
                 label: menu.chat.pinned ? 'Unpin chat' : 'Pin chat',
                 onClick: () => props.onSetPinned(menu.chat.roomId, !menu.chat.pinned),
             }, {
-                label: menu.chat.muted ? 'Unmute chat' : 'Mute chat',
-                onClick: () => props.onSetMuted(menu.chat.roomId, !menu.chat.muted),
+                label: isMuted(menu.chat) ? 'Unmute chat' : 'Mute chat',
+                onClick: () => props.onSetMuted(menu.chat.roomId, !isMuted(menu.chat)),
             }, {
                 label: menu.chat.hidden ? 'Unhide chat' : 'Hide chat',
                 onClick: () => props.onSetHidden(menu.chat.roomId, !menu.chat.hidden),
@@ -183,8 +183,6 @@ function plainPreview(text: string): string {
     return splitLinks(text).map(seg => seg.text).join('');
 }
 
-// Shown beside a muted chat's name: muted in Pigeonhole (⋯ → Mute), or in
-// the network's own app, which Pigeonhole follows.
 function PinIcon() {
     return (
         <svg className="chat-pinned" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -196,8 +194,20 @@ function PinIcon() {
     );
 }
 
+// Whether ⋯ → Unmute applies: muted in Pigeonhole, or on a network that
+// Pigeonhole can unmute (Discord, WhatsApp, Instagram). A mute from
+// Messenger's or Google Messages' own app can only be undone there.
+function isMuted(chat: inbox.Chat): boolean {
+    return chat.muted || (chat.mutedOnNetwork && chat.canMuteOnNetwork);
+}
+
+// Shown beside a muted chat's name: muted in Pigeonhole (⋯ → Mute), or on
+// the network, which Pigeonhole follows.
 function MutedIcon({chat}: {chat: inbox.Chat}) {
-    const where = chat.muted ? 'Muted in Pigeonhole' : `Muted in ${NETWORK_LABELS[chat.network] ?? chat.network}`;
+    const network = NETWORK_LABELS[chat.network] ?? chat.network;
+    const where = chat.muted ? 'Muted in Pigeonhole'
+        : chat.canMuteOnNetwork ? `Muted on ${network}`
+        : `Muted in the ${network} app; unmute it there`;
     return (
         <svg className="chat-muted" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={where}>

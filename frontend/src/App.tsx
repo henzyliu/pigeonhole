@@ -1,5 +1,5 @@
 import {KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {EventsOn, Go, inbox, NETWORK_LABELS} from './api';
+import {errorText, EventsOn, Go, inbox, NETWORK_LABELS} from './api';
 import {isMod, MOD, ShortcutsHelp} from './shortcuts';
 import ChatList from './ChatList';
 import MessageResults from './MessageResults';
@@ -464,7 +464,10 @@ export default function App() {
                         <ChatList chats={visibleChats} selected={selected} highlighted={highlighted} onSelect={setSelected}
                                   emptyText={query.trim() ? 'No chats match.' : emptyText} typing={typing} presence={presence}
                                   onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
-                                  onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}
+                                  onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(e => {
+                                      setStartError(`Couldn't ${muted ? 'mute' : 'unmute'} the chat: ${errorText(e)}`);
+                                      window.setTimeout(() => setStartError(''), 6000);
+                                  })}
                                   onSetPinned={(roomId, pinned) => Go.SetChatPinned(roomId, pinned).then(loadChats).catch(console.error)}/>
                     );
                     // While searching, matching messages follow the matching chats.

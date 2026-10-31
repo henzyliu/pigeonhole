@@ -43,11 +43,16 @@ type Chat struct {
 	// HistoryLoading is set while the bridge is still fetching older
 	// messages for this chat.
 	HistoryLoading bool `json:"historyLoading"`
-	// Muted is set when muted in Pigeonhole (⋯ → Mute); MutedOnNetwork when
-	// muted in the network's own app. Either way it doesn't alert or count
+	// Muted is set when muted in Pigeonhole only; MutedOnNetwork when muted
+	// on the network (in its own app, or from Pigeonhole where the network
+	// allows it, see CanMuteOnNetwork). Either way it doesn't alert or count
 	// toward the app's unread badge.
 	Muted          bool `json:"muted"`
 	MutedOnNetwork bool `json:"mutedOnNetwork"`
+	// CanMuteOnNetwork is set when muting from Pigeonhole changes it on the
+	// network too (Discord, WhatsApp and Instagram), so Unmute can undo a
+	// mute from the network's own app.
+	CanMuteOnNetwork bool `json:"canMuteOnNetwork"`
 	// Draft is the unsent message typed in this chat, and DraftReply the
 	// message it replies to; both stay on this computer.
 	Draft      string `json:"draft"`
@@ -217,7 +222,12 @@ func (s *Service) Chats(ctx context.Context) ([]Chat, error) {
 		portal := s.portalFor(ctx, c.Network, c.RoomID)
 		return portal != nil && portal.RoomType == database.RoomTypeSpace
 	})
+	canMute := map[string]bool{}
+	for _, netID := range s.order {
+		canMute[netID] = s.networkCanMute(ctx, netID)
+	}
 	for i := range chats {
+		chats[i].CanMuteOnNetwork = canMute[chats[i].Network]
 		chats[i].Category = chatCategory(chats[i].Network, s.portalFor(ctx, chats[i].Network, chats[i].RoomID), chats[i].IsDM)
 		if chats[i].Category == CategoryGroups && s.looksLikeMarketplace(ctx, chats[i]) {
 			chats[i].Category = CategoryMarketplace
@@ -763,10 +773,58 @@ func (s *Service) SetDraft(ctx context.Context, roomID, text, replyTo string) er
 	return s.Store.SetDraft(ctx, id.RoomID(roomID), text, id.EventID(replyTo))
 }
 
-// SetMuted mutes a chat in Pigeonhole only (nothing changes on the
-// network), or unmutes it.
+// SetMuted mutes a chat until it's unmuted, or unmutes it. Where the
+// network allows it (see networkCanMute) that happens on the network, so it
+// matches the network's own apps; elsewhere it's in Pigeonhole only.
 func (s *Service) SetMuted(ctx context.Context, roomID string, muted bool) error {
-	return s.Store.SetLocalMuted(ctx, id.RoomID(roomID), muted)
+	n, err := s.roomNetwork(ctx, roomID)
+	if err != nil || !s.networkCanMute(ctx, n.ID) {
+		return s.Store.SetLocalMuted(ctx, id.RoomID(roomID), muted)
+	}
+	content := &event.BeeperMuteEventContent{}
+	mutedUntil := time.Time{}
+	if muted {
+		content.MutedUntil = -1 // until unmuted
+		mutedUntil = event.MutedForever
+	}
+	res := n.Bridge.QueueMatrixEvent(ctx, &event.Event{
+		Type:    event.AccountDataBeeperMute,
+		RoomID:  id.RoomID(roomID),
+		Sender:  Me,
+		Content: event.Content{Parsed: content},
+	})
+	if !res.Success {
+		s.Log.Warn().Err(res.Error).Str("network", n.ID).Bool("muted", muted).Msg("Failed to change mute on the network")
+		if res.Error != nil {
+			return fmt.Errorf("couldn't change it on %s: %w", n.Name, res.Error)
+		}
+		return fmt.Errorf("couldn't change it on %s", n.Name)
+	}
+	// The network sends the new setting back, but show it straight away. A
+	// mute set in Pigeonhole only from before is cleared either way.
+	if err = s.Store.Mute(ctx, id.RoomID(roomID), mutedUntil); err != nil {
+		return err
+	}
+	return s.Store.SetLocalMuted(ctx, id.RoomID(roomID), false)
+}
+
+// networkCanMute reports whether a network's bridge can mute chats on the
+// network itself (Messenger's and Google Messages' can't).
+func (s *Service) networkCanMute(ctx context.Context, netID string) bool {
+	n, ok := s.networks[netID]
+	if !ok || !n.started.Load() {
+		return false
+	}
+	user, err := n.Bridge.GetUserByMXID(ctx, Me)
+	if err != nil || user == nil {
+		return false
+	}
+	login := user.GetDefaultLogin()
+	if login == nil {
+		return false
+	}
+	_, ok = login.Client.(bridgev2.MuteHandlingNetworkAPI)
+	return ok
 }
 
 // SetPinned pins a chat to the top of the list, in Pigeonhole only.

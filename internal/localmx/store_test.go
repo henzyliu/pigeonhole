@@ -501,3 +501,29 @@ func TestEditAddingPreview(t *testing.T) {
 		t.Fatalf("a real edit should show as edited: %v %s", edited, raw)
 	}
 }
+
+// A mute from the network refreshes the chat list, so its bell shows or
+// clears; the same mute arriving again doesn't.
+func TestNetworkMuteNotifies(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(t.TempDir(), "@me:local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.DB.Close()
+	if err = store.CreateRoom(ctx, "!a:local", "discord", false, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	notified := 0
+	store.Notify = func(Change) { notified++ }
+	forever := time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	_ = store.Mute(ctx, "!a:local", forever)
+	_ = store.Mute(ctx, "!a:local", forever)
+	if notified != 1 {
+		t.Fatalf("muting twice: %d notifications, want 1", notified)
+	}
+	_ = store.Mute(ctx, "!a:local", time.Time{})
+	if notified != 2 {
+		t.Fatalf("unmuting: %d notifications, want 2", notified)
+	}
+}

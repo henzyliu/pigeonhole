@@ -320,8 +320,8 @@ func (a *App) SetDraft(roomID, text, replyTo string) error {
 	return a.svc.SetDraft(a.ctx, roomID, text, replyTo)
 }
 
-// SetChatMuted mutes a chat in Pigeonhole only (no alerts, not counted in
-// the app's unread badge), or unmutes it.
+// SetChatMuted mutes a chat (no alerts, not counted in the app's unread
+// badge), on the network where it allows that, or unmutes it.
 func (a *App) SetChatMuted(roomID string, muted bool) error {
 	return a.svc.SetMuted(a.ctx, roomID, muted)
 }
