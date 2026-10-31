@@ -12,6 +12,7 @@ import (
 
 	"github.com/rs/zerolog"
 	discord "go.mau.fi/mautrix-discord/pkg/connector"
+	gmessages "go.mau.fi/mautrix-gmessages/pkg/connector"
 	"go.mau.fi/mautrix-meta/pkg/connector"
 	"go.mau.fi/mautrix-meta/pkg/igconnector"
 	whatsapp "go.mau.fi/mautrix-whatsapp/pkg/connector"
@@ -135,7 +136,30 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 	if err = s.addNetwork(dataDir, "discord", "Discord", dc); err != nil {
 		return nil, err
 	}
+	gm, err := googleMessagesConnector()
+	if err != nil {
+		return nil, err
+	}
+	if err = s.addNetwork(dataDir, "gmessages", "Google Messages", gm); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// googleMessagesConnector is the Google Messages bridge, which pairs with
+// the Messages app on an Android phone like Messages for Web does: sign in
+// to Google, then tap the matching emoji on the phone. (Google discontinued
+// the QR code pairing.) The phone sends and receives the texts, so it has to
+// stay online.
+func googleMessagesConnector() (*gmessages.GMConnector, error) {
+	gm := &gmessages.GMConnector{}
+	if err := loadConfig(gmessages.ExampleConfig, &gm.Config); err != nil {
+		return nil, err
+	}
+	// How this computer is listed under Device pairing on the phone. It
+	// pairs as a tablet, which leaves Messages for Web in a browser free.
+	gm.Config.DeviceMeta.OS = "Pigeonhole"
+	return gm, nil
 }
 
 // whatsAppConnector is the WhatsApp bridge with its defaults adjusted for a

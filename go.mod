@@ -9,6 +9,7 @@ require (
 	github.com/wailsapp/go-webview2 v1.0.22
 	github.com/wailsapp/wails/v2 v2.17.0
 	go.mau.fi/mautrix-discord v0.7.6-0.20261022150716-bf7bb1190eea
+	go.mau.fi/mautrix-gmessages v0.2610.0
 	go.mau.fi/mautrix-meta v0.2610.0
 	go.mau.fi/mautrix-whatsapp v0.2610.0
 	go.mau.fi/util v0.11.0

@@ -9,6 +9,7 @@ export const NETWORK_LABELS: Record<string, string> = {
     instagram: 'Instagram',
     whatsapp: 'WhatsApp',
     discord: 'Discord',
+    gmessages: 'Google Messages',
 };
 
 export function errorText(err: unknown): string {

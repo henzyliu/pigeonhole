@@ -4,7 +4,7 @@ import icon from './assets/pigeonhole.png';
 import NetworkIcon from './NetworkIcon';
 import {IS_MAC, MOD, useCloseOnEscape} from './shortcuts';
 
-const NETWORKS = ['messenger', 'instagram', 'whatsapp', 'discord'];
+const NETWORKS = ['messenger', 'instagram', 'whatsapp', 'discord', 'gmessages'];
 
 // The first-run welcome: what Pigeonhole is, connecting accounts, and a few
 // tips. Shown once, until finished or skipped.
@@ -25,7 +25,7 @@ export default function Welcome(props: {
                 {step === 0 && <>
                     <img className="welcome-icon" src={icon} alt=""/>
                     <h1>Welcome to Pigeonhole</h1>
-                    <p className="welcome-lead">Messenger, Instagram, WhatsApp and Discord, together in one app.</p>
+                    <p className="welcome-lead">Messenger, Instagram, WhatsApp, Discord and Google Messages, together in one app.</p>
                     <ul className="welcome-points">
                         <li>
                             <strong>Private by design.</strong> Your messages are stored on this computer only.
@@ -60,7 +60,8 @@ export default function Welcome(props: {
                     <p className="fine-print">
                         Pigeonhole connects the same unofficial way as the mautrix bridges. Meta may
                         occasionally ask you to confirm it's you, and WhatsApp links like WhatsApp Web.
-                        Discord's rules don't allow unofficial apps, so use it at your own risk.
+                        Discord's rules don't allow unofficial apps, so use it at your own risk. Google
+                        Messages pairs with your Android phone like Messages for Web.
                     </p>
                     <div className="welcome-actions">
                         <button className="link" onClick={() => setStep(0)}>← Back</button>

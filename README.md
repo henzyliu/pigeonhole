@@ -1,7 +1,7 @@
 # Pigeonhole
 
-A desktop app (macOS + Windows) that shows your Messenger, Instagram, WhatsApp and
-Discord chats in one inbox, and lets you reply. Everything runs and is stored locally on your
+A desktop app (macOS + Windows) that shows your Messenger, Instagram, WhatsApp,
+Discord and Google Messages chats in one inbox, and lets you reply. Everything runs and is stored locally on your
 computer, so there's no server to host.
 
 **[⬇ Download the latest version](https://github.com/henzyliu/pigeonhole/releases/latest)** for Mac or Windows.
@@ -48,7 +48,7 @@ GIPHY sees what you search for and your IP address, nothing from your chats.
 
 ## What it does
 
-- **One inbox** for Messenger, Instagram, WhatsApp and Discord, with People,
+- **One inbox** for Messenger, Instagram, WhatsApp, Discord and Google Messages, with People,
   Groups and Marketplace tabs (or one combined list) and message requests kept
   apart.
 - **Everything you'd expect when chatting:** replies, reactions (with a full
@@ -88,7 +88,9 @@ Found a security problem? Please report it privately; see
  Messenger ─┐                                   ┌─ React UI (Wails webview)
  Instagram ─┤                                   │
  WhatsApp  ─┼─ mautrix connectors ───── localmx ┤
- Discord   ─┘   (in-process, Go)      (SQLite)  └─ inbox service
+ Discord   ─┤   (in-process, Go)      (SQLite)  └─ inbox service
+ Google    ─┘
+ Messages
 ```
 
 - **Connectors**: the network code from the [mautrix-meta](https://github.com/mautrix/meta)
@@ -126,6 +128,13 @@ Found a security problem? Please report it privately; see
   DMs and group DMs only, no servers. Sign-in is the login window (which reads the
   token from discord.com) or a QR code scanned with the Discord app. Upgrading means
   picking a newer branch commit and checking it still builds against our mautrix.
+- **Google Messages**: [mautrix-gmessages](https://github.com/mautrix/gmessages),
+  which pairs with the Messages app on an Android phone like Messages for Web
+  (as a "tablet", so messages.google.com in a browser still works alongside it).
+  The phone sends and receives the texts (SMS, MMS and RCS), so it has to stay
+  online. Sign-in is the login window (accounts.google.com, the same Google
+  account as the phone), then tapping the matching emoji on the phone; Google
+  discontinued the QR code pairing.
 
 Adding another network (Slack, Signal, Telegram, ...) means adding its mautrix
 `bridgev2` connector in `inbox.New`; the UI picks it up automatically.
@@ -284,6 +293,7 @@ AGPL-3.0-or-later. Pigeonhole also includes or uses:
 | [mautrix-meta](https://github.com/mautrix/meta) (a modified copy in `third_party/mautrix-meta`) | Messenger and Instagram | AGPL-3.0-or-later |
 | [mautrix-whatsapp](https://github.com/mautrix/whatsapp) | WhatsApp | AGPL-3.0-or-later |
 | [mautrix-discord](https://github.com/mautrix/discord) | Discord | AGPL-3.0-or-later |
+| [mautrix-gmessages](https://github.com/mautrix/gmessages) | Google Messages | AGPL-3.0-or-later |
 | [mautrix-go](https://github.com/mautrix/go) and [go.mau.fi/util](https://github.com/mautrix/go-util) | The bridge framework | MPL-2.0 |
 | [whatsmeow](https://github.com/tulir/whatsmeow) | The WhatsApp protocol | MPL-2.0 |
 | [discordgo](https://github.com/bwmarrin/discordgo) (Beeper's fork) | The Discord protocol | BSD-3-Clause |
@@ -300,6 +310,6 @@ file grants extra rights to Beeper only; it doesn't apply to Pigeonhole.
 GIFs are searched and served by [GIPHY](https://giphy.com) under its API
 terms, which is why the picker says "Powered by GIPHY".
 
-Pigeonhole isn't affiliated with or endorsed by Meta, WhatsApp, Discord, GIPHY
-or the mautrix project. Messenger, Instagram, WhatsApp and Discord are trademarks of
-their owners.
+Pigeonhole isn't affiliated with or endorsed by Meta, WhatsApp, Discord, Google,
+GIPHY or the mautrix project. Messenger, Instagram, WhatsApp, Discord and Google
+Messages are trademarks of their owners.

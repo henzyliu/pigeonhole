@@ -172,7 +172,8 @@ export default function Accounts(props: {accounts: inbox.Account[]; signIn?: str
                         mautrix bridges, so Meta may occasionally ask you to verify the login. WhatsApp links
                         like WhatsApp Web, and unlinks if your phone is offline for about two weeks. Discord
                         covers direct and group messages (not servers); its rules don't allow unofficial
-                        clients, so use it at your own risk.
+                        clients, so use it at your own risk. Google Messages pairs with the Messages app on an
+                        Android phone, which sends your texts, so the phone needs to stay on and online.
                     </p>
                 </>}
 
@@ -332,6 +333,8 @@ function StepForm(props: {
             <p>{step.instructions}</p>
             {step.qrImage
                 ? <img className="qr-code" src={step.qrImage} alt="QR code to scan"/>
+                : step.displayType === 'emoji'
+                ? <div className="pair-emoji">{step.displayData}</div>
                 : step.displayData && step.displayType !== 'nothing' && <pre className="code-display">{step.displayData}</pre>}
             <p className="muted">Waiting…</p>
             {errorBanner}
