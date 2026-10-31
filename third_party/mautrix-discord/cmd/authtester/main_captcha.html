@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>mautrix-discord hCaptcha</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				font-family:
+					ui-sans-serif,
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					"Segoe UI",
+					sans-serif;
+			}
+			#status {
+				margin: 1rem 0;
+				padding: 1rem;
+				background-color: light-dark(#ddd, #333);
+
+				&.error {
+					background-color: hsla(0 62.7% 52.9% / 0.2);
+					color: red;
+					font-weight: bold;
+				}
+			}
+
+			#captcha {
+				min-height: 90px;
+			}
+
+			button {
+				display: block;
+				margin-top: 1rem;
+				font: inherit;
+				cursor: pointer;
+			}
+			button:disabled {
+				opacity: 0.6;
+				cursor: not-allowed;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>mautrix-discord hCaptcha</h1>
+			<main>
+				<div id="status">Loading challenge state...</div>
+				<div id="captcha"></div>
+				<button id="cancel" type="button">
+					Cancel & Use Terminal Fallback
+				</button>
+			</main>
+		</main>
+		<script>
+			let challenge = null;
+			let widgetID = null;
+			const statusEl = document.getElementById("status");
+			const cancelButton = document.getElementById("cancel");
+
+			function setStatus(message, isError) {
+				statusEl.textContent = message;
+				statusEl.classList.toggle("error", Boolean(isError));
+			}
+
+			async function parseError(response) {
+				let message = "Request failed";
+				try {
+					const body = await response.json();
+					if (body && body.error) {
+						message = body.error;
+					}
+				} catch (err) {}
+				return message;
+			}
+
+			async function postJSON(path, payload) {
+				const response = await fetch(path, {
+					method: "POST",
+					headers: {"Content-Type": "application/json"},
+					body: JSON.stringify(payload),
+				});
+				if (!response.ok) {
+					throw new Error(await parseError(response));
+				}
+			}
+
+			async function reportError(message) {
+				setStatus(message, true);
+				if (!challenge) {
+					return;
+				}
+				try {
+					await postJSON("/api/error", {id: challenge.id, error: message});
+				} catch (err) {}
+			}
+
+			async function cancelChallenge() {
+				if (!challenge) {
+					setStatus("No active challenge to cancel.", true);
+					return;
+				}
+				cancelButton.disabled = true;
+				setStatus(
+					"Canceling browser flow and switching back to terminal fallback...",
+				);
+				try {
+					await postJSON("/api/cancel", {id: challenge.id});
+					setStatus("Canceled! Check your terminal for manual entry.");
+				} catch (err) {
+					setStatus("Failed to cancel: " + err.message, true);
+					cancelButton.disabled = false;
+				}
+			}
+
+			async function submitToken(token) {
+				setStatus("Submitting CAPTCHA token...");
+				cancelButton.disabled = true;
+				await postJSON("/api/solve", {id: challenge.id, token: token});
+				setStatus("CAPTCHA token submitted! Check your terminal.");
+			}
+
+			function loadHCaptchaScript() {
+				const script = document.createElement("script");
+				script.src =
+					"https://js.hcaptcha.com/1/api.js?render=explicit&onload=onHCaptchaLoad&recaptchacompat=off&host=discord.com";
+				script.async = true;
+				script.defer = true;
+				script.onerror = function () {
+					reportError("Failed to load hCaptcha API script.");
+				};
+				document.head.appendChild(script);
+			}
+
+			function applyRqData() {
+				if (!challenge || !challenge.rqdata) {
+					return;
+				}
+				hcaptcha.setData(widgetID, {rqdata: challenge.rqdata});
+			}
+
+			function renderHCaptcha() {
+				widgetID = hcaptcha.render("captcha", {
+					sitekey: challenge.site_key,
+					size: challenge.invisible ? "invisible" : "normal",
+					callback: function (token) {
+						submitToken(token).catch(function (err) {
+							reportError("Failed to submit token: " + err.message);
+						});
+					},
+					"open-callback": function () {
+						setStatus("CAPTCHA challenge opened. Complete it in this page.");
+					},
+					"close-callback": function () {
+						setStatus(
+							"CAPTCHA challenge was closed. Re-open it here or cancel to use terminal fallback.",
+						);
+					},
+					"expired-callback": function () {
+						reportError("hCaptcha token expired before submission.");
+					},
+					"chalexpired-callback": function () {
+						reportError("hCaptcha challenge expired.");
+					},
+					"error-callback": function (message) {
+						reportError("hCaptcha error: " + message);
+					},
+				});
+				applyRqData();
+				if (challenge.invisible) {
+					setStatus("Launching invisible challenge...");
+					hcaptcha.execute(widgetID);
+				} else {
+					setStatus(
+						"Solve the CAPTCHA below. The token will submit automatically.",
+					);
+				}
+			}
+
+			async function loadChallenge() {
+				const response = await fetch("/api/challenge", {cache: "no-store"});
+				if (!response.ok) {
+					throw new Error(await parseError(response));
+				}
+				challenge = await response.json();
+				if (challenge.service !== "hcaptcha") {
+					throw new Error(
+						"Only hCaptcha challenges are supported by this test page.",
+					);
+				}
+				if (!challenge.site_key) {
+					throw new Error("Challenge is missing captcha_sitekey.");
+				}
+			}
+
+			async function init() {
+				cancelButton.addEventListener("click", function () {
+					cancelChallenge().catch(function (err) {
+						setStatus("Failed to cancel: " + err.message, true);
+					});
+				});
+
+				try {
+					await loadChallenge();
+					setStatus("Challenge state loaded. Loading hCaptcha...");
+					loadHCaptchaScript();
+				} catch (err) {
+					reportError(err.message);
+				}
+			}
+
+			window.onHCaptchaLoad = function () {
+				try {
+					renderHCaptcha();
+				} catch (err) {
+					reportError("Failed to initialize hCaptcha: " + err.message);
+				}
+			};
+
+			init();
+		</script>
+	</body>
+</html>

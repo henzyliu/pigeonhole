@@ -54,7 +54,9 @@ GIPHY sees what you search for and your IP address, nothing from your chats.
 - **Everything you'd expect when chatting:** replies, reactions (with a full
   emoji picker), photos, videos, files and voice messages, pasting images,
   GIFs, link previews, typing indicators, read receipts, and editing or
-  unsending your messages.
+  unsending your messages. Discord shows friends' status (online, idle or do
+  not disturb) on DMs and in @mention suggestions, and how many are online in
+  a group.
 - **Search** across every chat, or within one (⌘F / Ctrl+F), jumping straight
   to the message however far back it is.
 - **Shared panel:** every photo, video, file and link in a chat.
@@ -123,11 +125,15 @@ Found a security problem? Please report it privately; see
   the network sent. GIFs go to WhatsApp as GIPHY's MP4 version, which WhatsApp
   plays as a looping GIF, rather than being converted.
 - **Discord**: [mautrix-discord](https://github.com/mautrix/discord)'s
-  `bridgev2` rewrite (the `megadiscord` branch, not yet released upstream), pinned to one commit in
-  `go.mod` along with the `beeper/discordgo` fork it needs. Its default config bridges
-  DMs and group DMs only, no servers. Sign-in is the login window (which reads the
-  token from discord.com) or a QR code scanned with the Discord app. Upgrading means
-  picking a newer branch commit and checking it still builds against our mautrix.
+  `bridgev2` rewrite (the `megadiscord` branch, not yet released upstream), copied from one
+  commit (`v0.7.6-0.20261022150716-bf7bb1190eea`) into `third_party/mautrix-discord` and wired in
+  via a `replace` in `go.mod`, along with the `beeper/discordgo` fork it needs. Its default config
+  bridges DMs and group DMs only, no servers. Sign-in is the login window (which reads the
+  token from discord.com) or a QR code scanned with the Discord app. Its one patch, marked
+  `Pigeonhole:`, passes every gateway event on to the app (`DiscordConnector.OnEvent`), which
+  follows friends' online status from them for Discord's status dots (`internal/inbox/presence.go`);
+  the bridge itself ignores status. Upgrading means copying a newer branch commit over it,
+  re-applying the patch and checking it still builds against our mautrix.
 - **Google Messages**: [mautrix-gmessages](https://github.com/mautrix/gmessages),
   which pairs with the Messages app on an Android phone like Messages for Web
   (as a "tablet", so messages.google.com in a browser still works alongside it).
@@ -292,7 +298,7 @@ AGPL-3.0-or-later. Pigeonhole also includes or uses:
 |---|---|---|
 | [mautrix-meta](https://github.com/mautrix/meta) (a modified copy in `third_party/mautrix-meta`) | Messenger and Instagram | AGPL-3.0-or-later |
 | [mautrix-whatsapp](https://github.com/mautrix/whatsapp) | WhatsApp | AGPL-3.0-or-later |
-| [mautrix-discord](https://github.com/mautrix/discord) | Discord | AGPL-3.0-or-later |
+| [mautrix-discord](https://github.com/mautrix/discord) (a modified copy in `third_party/mautrix-discord`) | Discord | AGPL-3.0-or-later |
 | [mautrix-gmessages](https://github.com/mautrix/gmessages) | Google Messages | AGPL-3.0-or-later |
 | [mautrix-go](https://github.com/mautrix/go) and [go.mau.fi/util](https://github.com/mautrix/go-util) | The bridge framework | MPL-2.0 |
 | [whatsmeow](https://github.com/tulir/whatsmeow) | The WhatsApp protocol | MPL-2.0 |
@@ -304,8 +310,9 @@ AGPL-3.0-or-later. Pigeonhole also includes or uses:
 | [zerolog](https://github.com/rs/zerolog), [go-qrcode](https://github.com/skip2/go-qrcode), [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) | Logging, QR codes, image handling | MIT / MIT / BSD-3-Clause |
 
 Each project keeps its own copyright and licence (in its source, or in
-`third_party/` for the copied one). The `third_party/mautrix-meta/LICENSE.exceptions`
-file grants extra rights to Beeper only; it doesn't apply to Pigeonhole.
+`third_party/` for the copied ones). The `LICENSE.exceptions` files in
+`third_party/mautrix-meta` and `third_party/mautrix-discord` grant extra rights to Beeper
+only; they don't apply to Pigeonhole.
 
 GIFs are searched and served by [GIPHY](https://giphy.com) under its API
 terms, which is why the picker says "Powered by GIPHY".

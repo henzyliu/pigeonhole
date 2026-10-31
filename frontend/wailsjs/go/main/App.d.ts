@@ -54,6 +54,8 @@ export function OpenUpdatePage():Promise<void>;
 
 export function PickAndSendFiles(arg1:string):Promise<void>;
 
+export function Presence():Promise<inbox.PresenceInfo>;
+
 export function React(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function Refresh():Promise<boolean>;

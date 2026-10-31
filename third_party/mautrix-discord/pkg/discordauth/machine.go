@@ -1,0 +1,416 @@
+// mautrix-discord - A Matrix-Discord puppeting bridge.
+// Copyright (C) 2026 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+package discordauth
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/rs/zerolog"
+)
+
+// An AuthMachine is a resumable state machine that embodies the core logic to
+// authenticate a user account with Discord. It is concerned with:
+//
+//   - Detecting CAPTCHA challenges, reporting them, and attaching the subsequent
+//     solution to the retried request.
+//   - Recognizing conditions such as IP verification and other required
+//     actions.
+//   - Accruing the state and fingerprints necessary to send the correct set of
+//     headers with each HTTP request.
+//
+// The machine converses purely in terms of [Prompt] (what we need from the
+// user) and [Answer] (what the user provided); it does not presuppose how this
+// information is presented to the user.
+//
+// Construct one with [NewAuthMachine], call [AuthMachine.Prepare] once, then
+// call [AuthMachine.Advance] repeatedly until a [LoginCompleted] is yielded,
+// which signals completion.
+//
+// An AuthMachine is single-use and not safe for use by multiple goroutines.
+type AuthMachine struct {
+	log     *zerolog.Logger
+	http    HTTP
+	APIBase string
+
+	Fingerprint    Fingerprint
+	InstallationID string
+	Personality    *Personality
+
+	login      string            // phone number/email
+	pending    *pendingRequest   // primary operation; logically, the "position in the login flow"
+	interrupt  *pendingRequest   // op needed to resolve an interruption (phone verification)
+	lastPrompt *Prompt           // last prompt that was shown to the user
+	mfa        *LoginMFARequired // set upon entering MFA flow
+	finished   bool
+
+	emailVerifyAnswered bool
+}
+
+func (am *AuthMachine) currentOp() *pendingRequest {
+	if am.interrupt != nil {
+		return am.interrupt
+	}
+	return am.pending
+}
+
+func NewAuthMachine(
+	ctx context.Context,
+	http HTTP,
+	personality *Personality,
+) *AuthMachine {
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "discord auth").
+		Logger()
+
+	return &AuthMachine{
+		log:     &log,
+		http:    http,
+		APIBase: "https://discord.com/api/v9",
+
+		Personality: personality,
+	}
+}
+
+type CredsPrompt struct {
+	Reason string
+}
+type MFACodePrompt struct {
+	Type AuthenticatorType
+}
+type MFAChallengePrompt struct {
+	*LoginMFARequired
+	Reason string
+}
+type EmailVerifyPrompt struct {
+	Retrying bool
+}
+type PhoneVerifyPrompt struct {
+	Phone    string // the phone number that the code was sent to
+	Retrying bool   // whether the previous attempt failed and we're asking again
+}
+
+// A Prompt is a request for user input or interaction; the [AuthMachine] is
+// suspended until the user's response is fed back to [AuthMachine.Advance] as
+// an [Answer]. Exactly one field is set (non-nil or non-zero).
+//
+// Most prompts are ordinary steps of the login flow, but Captcha,
+// PhoneVerifyPrompt, and EmailVerifyPrompt are interruptions: they preempt whatever
+// operation was in flight, and answering them ends up retrying it instead of
+// starting a new one.
+type Prompt struct {
+	// CredsPrompt is non-nil when we need to prompt for the user's email/phone
+	// number.
+	CredsPrompt *CredsPrompt
+	// Captcha is non-nil when a CAPTCHA challenge must be solved before
+	// proceeding.
+	Captcha *Captcha
+	// MFAChallengePrompt is non-nil when the initial credentials were
+	// accepted, but MFA is required to log in.
+	//
+	// Use the contained information to have the user select an authenticator
+	// type to log in with (TOTP, backup code, or SMS).
+	MFAChallengePrompt *MFAChallengePrompt
+	// MFACodePrompt is non-nil when the selected authenticator type has been
+	// noted and the state machine is ready to accept the MFA code (TOTP,
+	// backup code, or SMS code).
+	MFACodePrompt *MFACodePrompt
+	// PhoneVerifyPrompt is non-nil when a code was sent to the phone number
+	// associated with the Discord account via SMS.
+	//
+	// The code is needed to verify our current IP address.
+	PhoneVerifyPrompt *PhoneVerifyPrompt
+	// EmailVerifyPrompt is non-nil if an email requesting IP verification has
+	// been sent to the email associated with the Discord account.
+	EmailVerifyPrompt *EmailVerifyPrompt
+}
+
+// A CaptchaSolution contains a solution to a [Captcha].
+type CaptchaSolution struct {
+	Solution string
+}
+
+// An Answer responds to the last [Prompt] returned from
+// [AuthMachine.Advance]. Populate only the field corresponding to the field
+// that was set on the prompt:
+//
+//   - [Prompt.CredsPrompt]: [Answer.Creds]
+//   - [Prompt.MFAChallengePrompt]: [Answer.PickedMFAType]
+//   - [Prompt.MFACodePrompt]: [Answer.MFAContinue]
+//   - [Prompt.EmailVerifyPrompt]: none (an empty Answer resumes the flow)
+//   - [Prompt.PhoneVerifyPrompt]: [Answer.SMSCode]
+//   - [Prompt.Captcha]: [Answer.Solution]
+type Answer struct {
+	Creds         *Creds
+	PickedMFAType *AuthenticatorType
+	MFAContinue   *MFAContinue
+	SMSCode       string
+	Solution      *CaptchaSolution
+}
+
+// Advance consumes an [Answer] to the previously returned [Prompt] (nil on
+// the first call) and drives authentication forward, performing whatever
+// Discord API requests are needed.
+//
+// When the error is nil, exactly one of the other return values is non-nil:
+// the next [Prompt] to present, or a [LoginCompleted]. Once a [LoginCompleted]
+// has been returned, the state machine has completed and further calls to
+// Advance will error.
+//
+// An error does not advance the machine; it remains positioned at the last
+// prompt.
+func (am *AuthMachine) Advance(ctx context.Context, answer *Answer) (*Prompt, *LoginCompleted, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "advance discord auth state machine").
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	if am.finished {
+		return nil, nil, fmt.Errorf("cannot advance finished auth machine")
+	}
+
+	prompt, completed, err := am.advance(ctx, answer)
+	if prompt != nil {
+		// Remembering which prompt was presented last lets us know what to
+		// expect out of the next [Answer] (see [AuthMachine.advance]).
+		am.lastPrompt = prompt
+	}
+	if completed != nil {
+		am.finished = true
+	}
+	return prompt, completed, err
+}
+
+func (am *AuthMachine) advance(ctx context.Context, answer *Answer) (*Prompt, *LoginCompleted, error) {
+	log := zerolog.Ctx(ctx)
+
+	lastPrompt := am.lastPrompt
+	if lastPrompt == nil {
+		// Initial state; prompt for email/phone number and password.
+		return &Prompt{CredsPrompt: &CredsPrompt{}}, nil, nil
+	}
+
+	// The cases in the following switch explicitly check for API contract
+	// violations (specifically, nilness of the corresponding answer field) to
+	// help clients catch errors, especially since race conditions are likely
+	// possible.
+	var captchaSolution *CaptchaSolution
+	switch {
+	case lastPrompt.CredsPrompt != nil:
+		// The user submitted their email/phone number and password.
+		if answer.Creds == nil {
+			return nil, nil, fmt.Errorf("expected credentials in answer")
+		}
+		am.login = answer.Creds.Login
+		am.pending = loginOp(answer.Creds)
+	case lastPrompt.MFAChallengePrompt != nil:
+		// The user picked the MFA method they would like to proceed with.
+		if answer.PickedMFAType == nil {
+			return nil, nil, fmt.Errorf("expected picked mfa type in answer")
+		}
+		picked := *answer.PickedMFAType
+		log.Info().Str("mfa_type", string(picked)).Msg("Continuing with MFA flow")
+
+		if picked == AuthenticatorSMS {
+			am.pending = sendMFASMSOp(&am.mfa.MFAState)
+			// Fall into the pump to perform the request.
+			break
+		}
+		return &Prompt{MFACodePrompt: &MFACodePrompt{
+			Type: picked,
+		}}, nil, nil
+	case lastPrompt.MFACodePrompt != nil:
+		// After having picked the authenticator type, the user inputted their
+		// MFA code (the TOTP, backup code, or SMS code).
+		if answer.MFAContinue == nil {
+			return nil, nil, fmt.Errorf("expected mfa continue in answer")
+		}
+		am.pending = continueMFAOp(answer.MFAContinue, am.mfa)
+	case lastPrompt.EmailVerifyPrompt != nil:
+		// The user has authorized our IP address. Retry the last request.
+		am.emailVerifyAnswered = true
+	case lastPrompt.PhoneVerifyPrompt != nil:
+		// Our IP address needs to be verified via phone number. The user has
+		// inputted the received SMS code.
+		if answer.SMSCode == "" {
+			return nil, nil, fmt.Errorf("expected sms code in answer")
+		}
+		am.interrupt = verifyPhoneNumberOp(VerifyPhoneNumberRequest{
+			Phone: lastPrompt.PhoneVerifyPrompt.Phone,
+			Code:  answer.SMSCode,
+		})
+	case lastPrompt.Captcha != nil:
+		// The user solved the CAPTCHA challenge. Retry the last request.
+		if answer.Solution == nil {
+			return nil, nil, fmt.Errorf("expected captcha solution in answer")
+		}
+		captchaSolution = answer.Solution
+	default:
+		return nil, nil, fmt.Errorf("cannot advance from unhandled prompt")
+	}
+
+	return am.pump(ctx, captchaSolution)
+}
+
+// pump drives the machine's operations forward until one of them yields a
+// [Prompt] for the user, the login is completed, or an error occurs.
+func (am *AuthMachine) pump(
+	ctx context.Context,
+	solution *CaptchaSolution,
+) (*Prompt, *LoginCompleted, error) {
+	needSolution := am.lastPrompt != nil && am.lastPrompt.Captcha != nil
+	if needSolution && solution == nil {
+		return nil, nil, fmt.Errorf("cannot proceed without a captcha solution")
+	}
+
+	for {
+		op := am.currentOp()
+
+		log := zerolog.Ctx(ctx).With().
+			Str("machine_op_name", op.name).
+			Logger()
+		opCtx := log.WithContext(ctx)
+
+		// Build the request data.
+		req, err := op.request(opCtx, am)
+		if err != nil {
+			return nil, nil, fmt.Errorf("constructing %s request: %w", op.name, err)
+		}
+		if needSolution {
+			// Apply the CAPTCHA solution to the request.
+			req.Header.Set(HeaderCaptchaKey, solution.Solution)
+			am.lastPrompt.Captcha.UpdateHeaders(&req.Header)
+			// Only apply the solution to the first request in this pump of the
+			// state machine; don't smear it across all requests. (Another
+			// CAPTCHA will terminate the current pump.)
+			needSolution = false
+		}
+
+		// Send the request to Discord.
+		body, err := am.exchange(opCtx, req)
+		var capErr *CaptchaError
+		var apiErr APIError
+		// Here is where we perform uniform error handling for all
+		// [pendingRequest]s. We presume that a CAPTCHA challenge may be presented
+		// in lieu of a response to _any_ request.
+		switch {
+		case errors.As(err, &capErr):
+			return &Prompt{Captcha: capErr.Captcha}, nil, nil
+		case errors.As(err, &apiErr):
+			if apiErr.RequiresEmailVerification() {
+				return &Prompt{EmailVerifyPrompt: &EmailVerifyPrompt{
+					Retrying: am.emailVerifyAnswered,
+				}}, nil, nil
+			}
+			if apiErr.RequiresPhoneVerification() {
+				// This presumes that the "code sent to phone via SMS, then IP
+				// authorization" flow can only be triggered by logging in with
+				// a phone number instead of an email.
+				return &Prompt{PhoneVerifyPrompt: &PhoneVerifyPrompt{
+					Phone: am.login,
+				}}, nil, nil
+			}
+
+			// Give the current [pendingRequest] a chance to handle the error.
+			if op.fail != nil {
+				prompt, err := op.fail(opCtx, am, apiErr)
+				if prompt != nil {
+					zerolog.Ctx(opCtx).Info().
+						Int("discord_error_code", int(apiErr.Code)).
+						Str("discord_error_message", apiErr.Message).
+						Str("discord_field_errors", apiErr.FieldErrorString()).
+						Msg("Discord API error was converted into a prompt")
+				}
+				return prompt, nil, err
+			}
+			return nil, nil, apiErr
+		case err != nil:
+			return nil, nil, fmt.Errorf("making %s request: %w", op.name, err)
+		}
+
+		prompt, done, err := op.succeed(opCtx, am, body)
+		if err != nil || prompt != nil || done != nil {
+			return prompt, done, err
+		}
+		// If we're here, then the op we just finished wants to run more ops.
+		// Verify that something changed pending or interrupt.
+		nextOp := am.currentOp()
+		if nextOp == op {
+			// Don't infinitely loop on the same op.
+			return nil, nil, fmt.Errorf("%s operation did not change the op", op.name)
+		}
+	}
+}
+
+// handleAuthResponse tries to consume a response body from /auth/login or
+// /auth/mfa/<type> as a successful login, handling any encountered MFA
+// challenge.
+func (am *AuthMachine) handleAuthResponse(
+	ctx context.Context,
+	body []byte,
+) (*Prompt, *LoginCompleted, error) {
+	log := zerolog.Ctx(ctx)
+
+	var completed LoginCompleted
+	err := json.Unmarshal(body, &completed)
+	if err != nil {
+		err = fmt.Errorf("unmarshaling login response: %w", err)
+		return nil, nil, err
+	}
+
+	if !completed.HasToken() {
+		log.Debug().Msg("Response lacked a token, attempting to handle as MFA")
+
+		am.mfa = &LoginMFARequired{}
+		err = json.Unmarshal(body, &am.mfa)
+		if err != nil {
+			err = fmt.Errorf("unmarshaling mfa required response: %w", err)
+			return nil, nil, err
+		}
+		if !am.mfa.MFARequired {
+			// Discord responded with something else that we don't know
+			// about yet.
+			err = fmt.Errorf("unknown login response")
+			return nil, nil, err
+		}
+
+		log := log.With().
+			Str("mfa_login_instance_id", am.mfa.LoginInstanceID).
+			Bool("mfa_accepting_backup_codes", am.mfa.BackupCodesAccepted).
+			Bool("mfa_sms_enabled", am.mfa.SMSEnabled).
+			Bool("mfa_totp_enabled", am.mfa.TOTPEnabled).
+			Bool("mfa_has_webauthn_credential", am.mfa.WebAuthnCredential != nil).
+			Logger()
+
+		log.Info().Msg("Need to log in with MFA")
+
+		return &Prompt{MFAChallengePrompt: &MFAChallengePrompt{
+			LoginMFARequired: am.mfa,
+		}}, nil, nil
+	}
+
+	if am.mfa != nil && completed.UserID == "" {
+		log.Debug().Msg("Fixing up login completion with the user ID from the MFA challenge")
+		completed.UserID = am.mfa.UserID
+	}
+	log.Info().
+		Str("user_locale", completed.UserSettings.Locale).
+		Msg("Logged in successfully")
+	return nil, &completed, nil
+}

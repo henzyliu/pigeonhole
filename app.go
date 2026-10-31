@@ -310,6 +310,10 @@ func (a *App) Refresh() bool { return a.svc.Reconnect("refresh") }
 // Typing lists who is typing in each chat right now, by room ID.
 func (a *App) Typing() (map[string][]string, error) { return a.svc.Typing(a.ctx) }
 
+// Presence gives the Discord statuses to show: the other person's in each
+// DM, and how many friends are online in each group.
+func (a *App) Presence() (*inbox.PresenceInfo, error) { return a.svc.Presence(a.ctx) }
+
 // SetDraft saves the unsent message typed in a chat (and the message it
 // replies to); empty text clears it.
 func (a *App) SetDraft(roomID, text, replyTo string) error {

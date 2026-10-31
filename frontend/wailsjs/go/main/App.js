@@ -102,6 +102,10 @@ export function PickAndSendFiles(arg1) {
   return window['go']['main']['App']['PickAndSendFiles'](arg1);
 }
 
+export function Presence() {
+  return window['go']['main']['App']['Presence']();
+}
+
 export function React(arg1, arg2, arg3) {
   return window['go']['main']['App']['React'](arg1, arg2, arg3);
 }

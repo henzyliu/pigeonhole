@@ -20,6 +20,8 @@ type Member struct {
 	UserID string `json:"userId"`
 	Name   string `json:"name"`
 	Avatar string `json:"avatar"`
+	// Presence is a Discord friend's status ("online", "idle" or "dnd").
+	Presence string `json:"presence,omitempty"`
 }
 
 // Mention is a person picked from the @ suggestions, as "@Name" in the
@@ -39,6 +41,7 @@ func (s *Service) ChatMembers(ctx context.Context, roomID string) ([]Member, err
 	if err != nil {
 		return nil, err
 	}
+	presence := s.memberPresence(ctx, roomID)
 	out := []Member{}
 	for userID, membership := range members {
 		if membership != event.MembershipJoin || userID == Me || s.isSelf(userID) {
@@ -48,7 +51,7 @@ func (s *Service) ChatMembers(ctx context.Context, roomID string) ([]Member, err
 		if !ok || p.name == "" {
 			continue // the bridge bot, or someone not loaded yet
 		}
-		out = append(out, Member{UserID: string(userID), Name: p.name, Avatar: MediaURL(p.avatar)})
+		out = append(out, Member{UserID: string(userID), Name: p.name, Avatar: MediaURL(p.avatar), Presence: presence[userID]})
 	}
 	slices.SortFunc(out, func(a, b Member) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	return out, nil

@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS media (
 
 // Change describes what the UI should refresh.
 type Change struct {
-	Kind   string    `json:"kind"` // "rooms", "messages", "typing", "status"
+	Kind   string    `json:"kind"` // "rooms", "messages", "typing", "status", "presence"
 	RoomID id.RoomID `json:"roomId,omitempty"`
 }
 

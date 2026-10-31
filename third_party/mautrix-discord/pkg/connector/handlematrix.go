@@ -1,0 +1,660 @@
+// mautrix-discord - A Matrix-Discord puppeting bridge.
+// Copyright (C) 2026 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+package connector
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"maps"
+	"math"
+	"strings"
+	"time"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/variationselector"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
+
+	"go.mau.fi/mautrix-discord/pkg/discordid"
+)
+
+var (
+	_ bridgev2.ReactionHandlingNetworkAPI    = (*DiscordClient)(nil)
+	_ bridgev2.RedactionHandlingNetworkAPI   = (*DiscordClient)(nil)
+	_ bridgev2.EditHandlingNetworkAPI        = (*DiscordClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI = (*DiscordClient)(nil)
+	_ bridgev2.TypingHandlingNetworkAPI      = (*DiscordClient)(nil)
+	_ bridgev2.MuteHandlingNetworkAPI        = (*DiscordClient)(nil)
+	_ bridgev2.UserBlockingNetworkAPI        = (*DiscordClient)(nil)
+)
+
+type contextKey int
+
+const (
+	contextKeyChannel contextKey = iota
+)
+
+type SendAttempt struct {
+	At                        time.Time
+	ChannelType               discordgo.ChannelType
+	RecipientRelationshipType *discordgo.RelationshipType
+}
+
+func (d *DiscordClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (*bridgev2.MatrixMessageResponse, error) {
+	if !d.IsLoggedIn() {
+		return nil, bridgev2.ErrNotLoggedIn
+	}
+
+	log := zerolog.Ctx(ctx).With().Str("action", "matrix message send").Logger()
+	ctx = log.WithContext(ctx)
+
+	portal := msg.Portal
+	guildID := portal.Metadata.(*discordid.PortalMetadata).GuildID
+	parentChannelID := discordid.ParseChannelPortalID(portal.ID)
+	channelID := parentChannelID
+	threadChannelID := ""
+	threadRootRemoteID := getMatrixThreadRootRemoteMessageID(msg.ThreadRoot)
+
+	if threadRootRemoteID != "" {
+		thread, err := d.getThreadByRootMessageID(ctx, threadRootRemoteID)
+		if err != nil {
+			return nil, err
+		}
+		if thread != nil {
+			threadChannelID = thread.ThreadChannelID
+		} else if guildID != "" {
+			var startErr error
+			threadChannelID, startErr = d.startThreadFromMatrix(ctx, guildID, parentChannelID, threadRootRemoteID, getThreadName(msg.Content))
+			if startErr != nil {
+				// If creating the thread failed, try resolving it once more in case it already exists.
+				thread, err = d.getThreadByRootMessageID(ctx, threadRootRemoteID)
+				if err != nil {
+					return nil, err
+				} else if thread != nil {
+					threadChannelID = thread.ThreadChannelID
+				} else {
+					return nil, fmt.Errorf("failed to create Discord thread from Matrix message: %w", startErr)
+				}
+			}
+		}
+	}
+	if threadChannelID != "" {
+		channelID = threadChannelID
+	}
+	refererOpt := makeDiscordReferer(guildID, parentChannelID, threadChannelID)
+
+	ch := d.channelWithID(ctx, channelID)
+	ctx = context.WithValue(ctx, contextKeyChannel, ch)
+
+	// Perform any required screening before making any requests to Discord at
+	// all (message conversion does).
+	if err := d.screenOutgoingMessage(ctx, ch); err != nil {
+		return nil, err
+	}
+
+	sendReq, err := d.connector.MsgConv.ToDiscord(ctx, d.Session, msg, channelID, refererOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	if sendReq.Reference != nil && sendReq.Reference.ChannelID == parentChannelID && threadChannelID != "" {
+		sendReq.Reference.ChannelID = threadChannelID
+	}
+
+	if ch != nil {
+		var relType *discordgo.RelationshipType
+		if rel := d.relationshipWithDMRecipient(ch); rel != nil {
+			relType = &rel.Type
+		}
+
+		if channelIsPrivate(ch) {
+			// NOTE: These analytics are so that we can get some data on what's
+			// causing Discord to disable/restrict/ban accounts. For message
+			// attempts, we only send these for DMs at the moment.
+			//
+			// (This fires a goroutine internally so it won't block.)
+			d.sendOutgoingMessageAttemptAnalytics(ctx, map[string]any{
+				"messageFlags":   sendReq.Flags,
+				"messageType":    sendReq.Type,
+				"hasAttachments": len(sendReq.Attachments) > 0,
+				"hasEmbeds":      len(sendReq.Embeds) > 0,
+				"isReplying":     sendReq.Reference != nil && sendReq.Reference.Type == discordgo.MessageReferenceTypeDefault,
+			})
+		}
+
+		d.lastSendAttemptMutex.Lock()
+		d.lastSendAttempt = &SendAttempt{
+			At:                        time.Now(),
+			ChannelType:               ch.Type,
+			RecipientRelationshipType: relType,
+		}
+		d.lastSendAttemptMutex.Unlock()
+	}
+
+	txnID := networkid.TransactionID(sendReq.Nonce)
+	pendingMsg := &database.Message{}
+	if threadRootRemoteID != "" {
+		pendingMsg.ThreadRoot = discordid.MakeMessageID(threadRootRemoteID)
+	}
+	msg.AddPendingToSave(pendingMsg, txnID, nil)
+	sentMsg, err := d.Session.ChannelMessageSendComplex(channelID, sendReq, refererOpt, discordgo.WithContext(ctx))
+	if err != nil {
+		var restErr *discordgo.RESTError
+		if errors.As(err, &restErr) {
+			msg.RemovePending(txnID)
+		}
+		return nil, d.tryWrappingError(ctx, err)
+	}
+	sentMsgTimestamp, _ := discordgo.SnowflakeTimestamp(sentMsg.ID)
+	dbMessage := &database.Message{
+		ID:        discordid.MakeMessageID(sentMsg.ID),
+		SenderID:  discordid.MakeUserID(sentMsg.Author.ID),
+		Timestamp: sentMsgTimestamp,
+	}
+	if threadRootRemoteID != "" {
+		dbMessage.ThreadRoot = discordid.MakeMessageID(threadRootRemoteID)
+	}
+
+	return &bridgev2.MatrixMessageResponse{
+		DB:            dbMessage,
+		RemovePending: txnID,
+	}, nil
+}
+
+var errCannotDMStranger = errors.New("can't direct message a stranger")
+
+func (d *DiscordClient) screenOutgoingMessage(ctx context.Context, destCh *discordgo.Channel) error {
+	log := zerolog.Ctx(ctx)
+
+	if d.connector.Config.ForbidDMingStrangersEnabled() {
+		dmRecipID := dmChannelRecipientID(destCh)
+		if dmRecipID != nil {
+			rel := d.relationshipWithUserID(*dmRecipID)
+			friendsWithDMRecip := rel != nil && rel.Type == discordgo.RelationshipFriend
+
+			dmRecip := d.userCache.Resolve(ctx, *dmRecipID)
+
+			if dmRecip != nil && !dmRecip.Bot && !friendsWithDMRecip {
+				loggedRelType := "none"
+				if rel != nil {
+					loggedRelType = readableRelationshipType(rel.Type)
+				}
+				log.Info().
+					Str("relationship_type", loggedRelType).
+					Msg("Preventing direct message send to a stranger")
+
+				return bridgev2.WrapErrorInStatus(errCannotDMStranger).
+					WithStatus(event.MessageStatusFail).
+					WithIsCertain(true).
+					WithMessage("You can't message users who aren't on your friends list. To continue, use the Discord app to chat or add them as a friend.").
+					WithSendNotice(true)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *DiscordClient) sendOutgoingMessageAttemptAnalytics(ctx context.Context, extra map[string]any) {
+	props := d.baseAnalyticsProps(ctx)
+	maps.Copy(props, extra)
+
+	d.UserLogin.TrackAnalytics("Discord outgoing message attempt", props)
+}
+
+func (d *DiscordClient) HandleMatrixEdit(ctx context.Context, msg *bridgev2.MatrixEdit) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	}
+
+	log := zerolog.Ctx(ctx).With().Str("action", "matrix message edit").Logger()
+	ctx = log.WithContext(ctx)
+
+	content, _ := d.connector.MsgConv.ConvertMatrixMessageContent(
+		ctx,
+		msg.Portal,
+		msg.Content,
+		// Disregard link previews for now. Discord generally allows you to
+		// remove individual link previews from a message though.
+		[]string{},
+	)
+
+	guildID := msg.Portal.Metadata.(*discordid.PortalMetadata).GuildID
+	parentChannelID := discordid.ParseChannelPortalID(msg.Portal.ID)
+	channelID := parentChannelID
+	threadChannelID := ""
+	if msg.EditTarget != nil && msg.EditTarget.ThreadRoot != "" {
+		thread, err := d.getThreadByRootMessageID(ctx, discordid.ParseMessageID(msg.EditTarget.ThreadRoot))
+		if err != nil {
+			return fmt.Errorf("failed to resolve target thread for message edit: %w", err)
+		} else if thread != nil {
+			threadChannelID = thread.ThreadChannelID
+			channelID = threadChannelID
+		}
+	}
+
+	_, err := d.Session.ChannelMessageEdit(
+		channelID,
+		discordid.ParseMessageID(msg.EditTarget.ID),
+		content,
+		makeDiscordReferer(guildID, parentChannelID, threadChannelID),
+	)
+	if err != nil {
+		return d.tryWrappingError(ctx, err)
+	}
+
+	return nil
+}
+
+func (d *DiscordClient) PreHandleMatrixReaction(ctx context.Context, reaction *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
+	if !d.IsLoggedIn() {
+		return bridgev2.MatrixReactionPreResponse{}, bridgev2.ErrNotLoggedIn
+	}
+
+	emojiID := reaction.Content.RelatesTo.Key
+
+	// Figure out if this is a custom emoji or not.
+	if strings.HasPrefix(emojiID, "mxc://") {
+		customEmoji, err := d.connector.GetCustomEmojiByMXC(ctx, emojiID)
+
+		if err != nil {
+			return bridgev2.MatrixReactionPreResponse{}, fmt.Errorf("failed to get custom emoji by mxc: %w", err)
+		} else if customEmoji == nil || customEmoji.ID == "" || customEmoji.Name == "" {
+			return bridgev2.MatrixReactionPreResponse{}, bridgev2.WrapErrorInStatus(fmt.Errorf("unknown custom emoji mxc: %q", emojiID)).
+				WithMessage("that emoji can't be used on Discord").
+				WithIsCertain(true).
+				WithSendNotice(true).
+				WithErrorReason(event.MessageStatusUnsupported).
+				WithStatus(event.MessageStatusFail)
+		}
+
+		emojiID = fmt.Sprintf("%s:%s", customEmoji.Name, customEmoji.ID)
+	} else {
+		emojiID = variationselector.FullyQualify(emojiID)
+	}
+
+	return bridgev2.MatrixReactionPreResponse{
+		SenderID: discordid.UserLoginIDToUserID(d.UserLogin.ID),
+		EmojiID:  discordid.MakeEmojiID(emojiID),
+	}, nil
+}
+
+func (d *DiscordClient) HandleMatrixReaction(ctx context.Context, reaction *bridgev2.MatrixReaction) (*database.Reaction, error) {
+	if !d.IsLoggedIn() {
+		return nil, bridgev2.ErrNotLoggedIn
+	}
+
+	portal := reaction.Portal
+	meta := portal.Metadata.(*discordid.PortalMetadata)
+	parentChannelID := discordid.ParseChannelPortalID(portal.ID)
+	channelID := parentChannelID
+	threadChannelID := ""
+	if reaction.TargetMessage != nil && reaction.TargetMessage.ThreadRoot != "" {
+		thread, err := d.getThreadByRootMessageID(ctx, discordid.ParseMessageID(reaction.TargetMessage.ThreadRoot))
+		if err != nil {
+			return nil, err
+		} else if thread != nil {
+			threadChannelID = thread.ThreadChannelID
+			channelID = threadChannelID
+		}
+	}
+
+	return nil, d.tryWrappingError(ctx, d.Session.MessageReactionAddUser(
+		meta.GuildID,
+		channelID,
+		discordid.ParseMessageID(reaction.TargetMessage.ID),
+		discordid.ParseEmojiID(reaction.PreHandleResp.EmojiID),
+		makeDiscordReferer(meta.GuildID, parentChannelID, threadChannelID),
+	))
+}
+
+func (d *DiscordClient) HandleMatrixReactionRemove(ctx context.Context, removal *bridgev2.MatrixReactionRemove) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	}
+
+	removing := removal.TargetReaction
+	emojiID := removing.EmojiID
+	parentChannelID := discordid.ParseChannelPortalID(removal.Portal.ID)
+	channelID := parentChannelID
+	threadChannelID := ""
+	guildID := removal.Portal.Metadata.(*discordid.PortalMetadata).GuildID
+	targetMessage, err := d.UserLogin.Bridge.DB.Message.GetFirstPartByID(ctx, d.UserLogin.ID, removing.MessageID)
+	if err != nil {
+		return err
+	}
+	if targetMessage != nil && targetMessage.ThreadRoot != "" {
+		thread, err := d.getThreadByRootMessageID(ctx, discordid.ParseMessageID(targetMessage.ThreadRoot))
+		if err != nil {
+			return err
+		} else if thread != nil {
+			threadChannelID = thread.ThreadChannelID
+			channelID = threadChannelID
+		}
+	}
+
+	return d.tryWrappingError(ctx, d.Session.MessageReactionRemoveUser(
+		guildID,
+		channelID,
+		discordid.ParseMessageID(removing.MessageID),
+		discordid.ParseEmojiID(emojiID),
+		discordid.ParseUserLoginID(d.UserLogin.ID),
+		makeDiscordReferer(guildID, parentChannelID, threadChannelID),
+	))
+}
+
+func (d *DiscordClient) HandleMatrixMessageRemove(ctx context.Context, removal *bridgev2.MatrixMessageRemove) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	}
+
+	guildID := removal.Portal.Metadata.(*discordid.PortalMetadata).GuildID
+	parentChannelID := discordid.ParseChannelPortalID(removal.Portal.ID)
+	channelID := parentChannelID
+	threadChannelID := ""
+	if removal.TargetMessage != nil && removal.TargetMessage.ThreadRoot != "" {
+		thread, err := d.getThreadByRootMessageID(ctx, discordid.ParseMessageID(removal.TargetMessage.ThreadRoot))
+		if err != nil {
+			return err
+		} else if thread != nil {
+			threadChannelID = thread.ThreadChannelID
+			channelID = threadChannelID
+		}
+	}
+	messageID := discordid.ParseMessageID(removal.TargetMessage.ID)
+	return d.tryWrappingError(ctx, d.Session.ChannelMessageDelete(channelID, messageID, makeDiscordReferer(guildID, parentChannelID, threadChannelID)))
+}
+
+func (d *DiscordClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	}
+
+	log := msg.Portal.Log.With().
+		Str("event_id", string(msg.EventID)).
+		Str("action", "matrix read receipt").Logger()
+
+	guildID := msg.Portal.Metadata.(*discordid.PortalMetadata).GuildID
+	parentChannelID := discordid.ParseChannelPortalID(msg.Portal.ID)
+	threadChannelID := ""
+	threadRootRemoteID := ""
+	threadID := msg.Receipt.ThreadID
+	threadScoped := threadID != "" && threadID != event.ReadReceiptThreadMain
+
+	if threadScoped {
+		rootMsg, err := d.UserLogin.Bridge.DB.Message.GetPartByMXID(ctx, threadID)
+		if err != nil {
+			log.Err(err).Msg("Failed to resolve thread root event from receipt")
+			return err
+		} else if rootMsg != nil {
+			threadRootRemoteID = discordid.ParseMessageID(rootMsg.ID)
+			if rootMsg.ThreadRoot != "" {
+				threadRootRemoteID = discordid.ParseMessageID(rootMsg.ThreadRoot)
+			}
+			thread, err := d.getThreadByRootMessageID(ctx, threadRootRemoteID)
+			if err != nil {
+				log.Err(err).Msg("Failed to resolve thread channel from thread root")
+				return err
+			} else if thread != nil {
+				threadChannelID = thread.ThreadChannelID
+			}
+		}
+	}
+	if threadScoped && threadRootRemoteID == "" {
+		log.Debug().Stringer("receipt_thread_id", threadID).Msg("Dropping thread-scoped read receipt: unknown thread root")
+		return nil
+	}
+
+	var targetMessage *database.Message
+	var targetMessageID string
+
+	// Figure out the ID of the Discord message that we'll mark as read. If the
+	// receipt didn't exactly correspond with a message, try finding one close
+	// by to use as the target.
+	if msg.ExactMessage != nil {
+		targetMessage = msg.ExactMessage
+		targetMessageID = discordid.ParseMessageID(targetMessage.ID)
+		log = log.With().
+			Str("message_id", targetMessageID).
+			Logger()
+	} else {
+		var err error
+		if threadScoped && threadRootRemoteID != "" {
+			targetMessage, err = d.UserLogin.Bridge.DB.Message.GetLastThreadMessage(ctx, msg.Portal.PortalKey, discordid.MakeMessageID(threadRootRemoteID))
+			if err != nil {
+				log.Err(err).Msg("Failed to find latest thread message")
+				return err
+			}
+			if targetMessage != nil && targetMessage.Timestamp.After(msg.ReadUpTo) {
+				targetMessage = nil
+			}
+		} else {
+			targetMessage, err = d.UserLogin.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, msg.Portal.PortalKey, msg.ReadUpTo)
+			if err != nil {
+				log.Err(err).Msg("Failed to find closest message part")
+				return err
+			}
+		}
+
+		if targetMessage != nil {
+			// The read receipt didn't specify an exact message but we were able to
+			// find one close by.
+
+			targetMessageID = discordid.ParseMessageID(targetMessage.ID)
+			log = log.With().
+				Str("closest_message_id", targetMessageID).
+				Str("closest_event_id", targetMessage.MXID.String()).
+				Logger()
+			log.Debug().
+				Msg("Read receipt target event not found, using closest message")
+		} else {
+			log.Debug().Msg("Dropping read receipt: no messages found")
+			return nil
+		}
+	}
+
+	if threadScoped && targetMessage != nil {
+		targetMsgThreadRoot := discordid.ParseMessageID(targetMessage.ThreadRoot)
+		if targetMsgThreadRoot == "" {
+			targetMsgThreadRoot = discordid.ParseMessageID(targetMessage.ID)
+		}
+		if threadRootRemoteID != "" && targetMsgThreadRoot != threadRootRemoteID {
+			log.Debug().
+				Str("receipt_thread_root", threadRootRemoteID).
+				Str("target_thread_root", targetMsgThreadRoot).
+				Msg("Dropping read receipt due to thread mismatch")
+			return nil
+		}
+		if threadChannelID == "" && targetMsgThreadRoot != "" {
+			thread, err := d.getThreadByRootMessageID(ctx, targetMsgThreadRoot)
+			if err != nil {
+				return err
+			} else if thread != nil {
+				threadChannelID = thread.ThreadChannelID
+			}
+		}
+	}
+
+	channelID := parentChannelID
+	if threadChannelID != "" {
+		channelID = threadChannelID
+	}
+	resp, err := d.Session.ChannelMessageAckNoToken(
+		channelID,
+		targetMessageID,
+		makeDiscordReferer(guildID, parentChannelID, threadChannelID),
+	)
+	if err != nil {
+		log.Err(err).Msg("Failed to send read receipt to Discord")
+		return err
+	} else if resp.Token != nil {
+		log.Debug().
+			Str("unexpected_resp_token", *resp.Token).
+			Msg("Marked message as read on Discord (and got unexpected non-nil token)")
+	} else {
+		log.Debug().Msg("Marked message as read on Discord")
+	}
+
+	return nil
+}
+
+func (d *DiscordClient) viewingChannel(ctx context.Context, portal *bridgev2.Portal) error {
+	if portal.Metadata.(*discordid.PortalMetadata).GuildID != "" {
+		// Only private channels need this logic.
+		return nil
+	}
+
+	d.markedOpenedLock.Lock()
+	defer d.markedOpenedLock.Unlock()
+
+	channelID := discordid.ParseChannelPortalID(portal.ID)
+	log := zerolog.Ctx(ctx).With().
+		Str("channel_id", channelID).Logger()
+
+	lastMarkedOpenedTs := d.markedOpened[channelID]
+	if lastMarkedOpenedTs.IsZero() {
+		d.markedOpened[channelID] = time.Now()
+
+		err := d.Session.MarkViewing(channelID)
+
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to mark user as viewing channel")
+			return err
+		}
+
+		log.Trace().Msg("Marked channel as being viewed")
+	} else {
+		log.Trace().Str("channel_id", channelID).
+			Msg("Already marked channel as viewed, not doing so")
+	}
+
+	return nil
+}
+
+func (d *DiscordClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	} else if !msg.IsTyping {
+		return nil
+	}
+
+	log := zerolog.Ctx(ctx)
+
+	// Don't mind if this fails.
+	_ = d.viewingChannel(ctx, msg.Portal)
+
+	guildID := msg.Portal.Metadata.(*discordid.PortalMetadata).GuildID
+	channelID := discordid.ParseChannelPortalID(msg.Portal.ID)
+	err := d.Session.ChannelTyping(channelID, makeDiscordReferer(guildID, channelID, ""))
+
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to mark user as typing")
+		return err
+	}
+
+	log.Debug().Msg("Marked user as typing")
+	return nil
+}
+
+func (d *DiscordClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMute) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	}
+
+	channelID := discordid.ParseChannelPortalID(msg.Portal.ID)
+	log := zerolog.Ctx(ctx).With().
+		Str("muting_channel_id", channelID).
+		Int64("muting_until", msg.Content.MutedUntil).
+		Logger()
+	ctx = log.WithContext(ctx)
+	log.Debug().Msg("Handling Matrix mute")
+
+	ch := d.channelWithID(ctx, channelID)
+	if ch == nil {
+		log.Error().Msg("Failed to find channel to mute")
+		return fmt.Errorf("failed to mute non-existent channel %s", channelID)
+	}
+
+	mutedUntil := msg.Content.GetMutedUntilTime()
+	isMuting := mutedUntil.After(time.Now())
+	override := discordgo.UserGuildSettingsChannelOverrideEdit{
+		Muted: ptr.Ptr(isMuting),
+	}
+	if isMuting && mutedUntil != event.MutedForever {
+		// At the time of writing, arbitrary mute durations are supported by
+		// Discord; you aren't restricted to the official client's choices
+		// of 15 minutes, 1 hour, 3 hours, 8 hours, and 24 hours.
+		secs := int(math.Round(msg.Content.GetMuteDuration().Seconds()))
+		override.MuteConfig = &discordgo.MuteConfig{
+			EndTime:            &mutedUntil,
+			SelectedTimeWindow: &secs,
+		}
+	}
+
+	overrides := make(map[string]*discordgo.UserGuildSettingsChannelOverrideEdit)
+	overrides[ch.ID] = &override
+
+	edit := discordgo.UserGuildSettingsEdit{
+		ChannelOverrides: overrides,
+	}
+
+	log.Debug().Interface("muting_override", override).Msg("Computed channel override for mute")
+
+	guildID := ch.GuildID
+	if guildID == "" {
+		// Target private channels properly.
+		guildID = "@me"
+	}
+	_, err := d.Session.UserGuildSettingsEdit(guildID, &edit)
+	if err != nil {
+		return fmt.Errorf("failed to edit guild settings in response to mute: %w", err)
+
+	}
+	return nil
+}
+
+func (d *DiscordClient) HandleMatrixBlockUser(ctx context.Context, msg *bridgev2.MatrixBlockUser) error {
+	if !d.IsLoggedIn() {
+		return bridgev2.ErrNotLoggedIn
+	}
+	if msg.Content.ReportSpam {
+		return bridgev2.WrapErrorInStatus(errors.New("reporting spam is not supported on Discord")).WithIsCertain(true).WithErrorAsMessage().WithErrorReason(event.MessageStatusUnsupported).WithStatus(event.MessageStatusFail)
+	}
+	ch, err := d.Session.State.Channel(discordid.ParseChannelPortalID(msg.Portal.ID))
+	if err != nil {
+		return err
+	}
+	recipient := dmChannelRecipientID(ch)
+	if ch.Type != discordgo.ChannelTypeDM || recipient == nil {
+		return bridgev2.ErrNonDMBlockUser
+	}
+	if msg.Content.Block {
+		err = d.Session.RelationshipUserBlock(*recipient)
+	} else {
+		rel := d.relationshipWithUserID(*recipient)
+		if rel == nil || rel.Type != discordgo.RelationshipBlocked {
+			return nil
+		}
+		err = d.Session.RelationshipDelete(*recipient)
+	}
+	return err
+}

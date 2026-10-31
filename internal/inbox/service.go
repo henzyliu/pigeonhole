@@ -86,6 +86,11 @@ type Service struct {
 	connectedAt map[string]time.Time
 	// autoRetried holds failed messages already retried automatically.
 	autoRetried map[id.EventID]bool
+
+	presenceLock sync.Mutex
+	// presence holds Discord friends' statuses, by account and then user;
+	// see presence.go.
+	presence map[string]map[string]string
 }
 
 func New(dataDir string, log zerolog.Logger) (*Service, error) {
@@ -127,12 +132,13 @@ func New(dataDir string, log zerolog.Logger) (*Service, error) {
 		return nil, err
 	}
 	// Discord uses the bridge's bridgev2 rewrite, not yet released upstream
-	// (pinned in go.mod). Its default config bridges DMs and group DMs only,
+	// (a copy in third_party, with a hook for friends' online status). Its default config bridges DMs and group DMs only,
 	// no servers.
 	dc := &discord.DiscordConnector{}
 	if err = loadConfig(discord.ExampleConfig, &dc.Config); err != nil {
 		return nil, err
 	}
+	dc.OnEvent = s.onDiscordEvent
 	if err = s.addNetwork(dataDir, "discord", "Discord", dc); err != nil {
 		return nil, err
 	}
@@ -429,6 +435,10 @@ func (s *Service) onBridgeState(network string, state status.BridgeState) {
 		s.OnSignedOut(network, s.networks[network].Name, name)
 	}
 	s.emit("inbox:accounts", nil)
+	// Statuses only show while their Discord account is connected.
+	if network == "discord" {
+		s.emit("inbox:change", localmx.Change{Kind: "presence"})
+	}
 }
 
 // needsLogin reports whether an account's state means the network signed

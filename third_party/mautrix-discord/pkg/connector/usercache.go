@@ -1,0 +1,214 @@
+// mautrix-discord - A Matrix-Discord puppeting bridge.
+// Copyright (C) 2026 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+package connector
+
+import (
+	"context"
+	"errors"
+	"maps"
+	"net/http"
+	"slices"
+	"sync"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/rs/zerolog"
+
+	"go.mau.fi/mautrix-discord/pkg/discordid"
+)
+
+// NOTE: Not simply using `exsync.Map` because we want the lock to be held
+// during HTTP requests.
+
+type UserCache struct {
+	session *discordgo.Session
+	cache   map[string]*discordgo.User
+	lock    sync.Mutex
+}
+
+func NewUserCache(session *discordgo.Session) *UserCache {
+	return &UserCache{
+		session: session,
+		cache:   make(map[string]*discordgo.User),
+	}
+}
+
+func (uc *UserCache) UpdateWithReady(ready *discordgo.Ready) {
+	if ready == nil {
+		return
+	}
+
+	uc.lock.Lock()
+	defer uc.lock.Unlock()
+
+	self := ready.User
+	uc.cache[self.ID] = self
+
+	for _, user := range ready.Users {
+		uc.cache[user.ID] = user
+	}
+}
+
+// UpdateWithMessage updates the user cache with the users involved in a single
+// message (author, mentioned, mentioned author, etc.)
+//
+// The updated user IDs are returned.
+func (uc *UserCache) UpdateWithMessage(msg *discordgo.Message) []string {
+	if msg == nil {
+		return []string{}
+	}
+
+	// For now just forward to HandleMessages until a need for a specialized
+	// path makes itself known.
+	return uc.UpdateWithMessages([]*discordgo.Message{msg})
+}
+
+// UpdateWithMessages updates the user cache with the total set of users involved
+// with multiple messages (authors, mentioned users, mentioned authors, etc.)
+//
+// The updated user IDs are returned.
+func (uc *UserCache) UpdateWithMessages(msgs []*discordgo.Message) []string {
+	if len(msgs) == 0 {
+		return []string{}
+	}
+
+	collectedUsers := map[string]*discordgo.User{}
+	for _, msg := range msgs {
+		collectedUsers[msg.Author.ID] = msg.Author
+
+		referenced := msg.ReferencedMessage
+		if referenced != nil && referenced.Author != nil {
+			collectedUsers[referenced.Author.ID] = referenced.Author
+		}
+
+		for _, mentioned := range msg.Mentions {
+			collectedUsers[mentioned.ID] = mentioned
+		}
+
+		// Message snapshots lack `author` entirely and seemingly have an empty
+		// `mentions` array, even when the original message actually mentions
+		// someone.
+	}
+
+	uc.lock.Lock()
+	defer uc.lock.Unlock()
+
+	for _, user := range collectedUsers {
+		uc.cache[user.ID] = user
+	}
+
+	return slices.Collect(maps.Keys(collectedUsers))
+}
+
+func (uc *UserCache) UpdateWithUserUpdate(update *discordgo.UserUpdate) {
+	if update == nil || update.User == nil {
+		return
+	}
+
+	uc.lock.Lock()
+	defer uc.lock.Unlock()
+
+	uc.cache[update.ID] = update.User
+}
+
+// MergePartialUser merges the populated fields of a partial user (such as the
+// one embedded in a PRESENCE_UPDATE) into the cached full user, returning the
+// merged result. This is important to keep the cache coherent in the face of
+// partial updates.
+//
+// If there is no cached user to merge into, nil is returned.
+func (uc *UserCache) MergePartialUser(partial *discordgo.User) *discordgo.User {
+	if partial == nil || partial.ID == "" {
+		return nil
+	}
+
+	uc.lock.Lock()
+	defer uc.lock.Unlock()
+
+	existing := uc.cache[partial.ID]
+	if existing == nil {
+		return nil
+	}
+
+	// Copy before we mutate, as the pointer is shared.
+	// TODO: This doesn't distinguish between an empty field and an absent one.
+	merged := *existing
+	if partial.Username != "" {
+		merged.Username = partial.Username
+	}
+	if partial.GlobalName != "" {
+		merged.GlobalName = partial.GlobalName
+	}
+	if partial.Discriminator != "" {
+		merged.Discriminator = partial.Discriminator
+	}
+	if partial.Avatar != "" {
+		merged.Avatar = partial.Avatar
+	}
+
+	uc.cache[partial.ID] = &merged
+	return &merged
+}
+
+// Resolve looks up a user in the cache, requesting the user from the Discord
+// HTTP API if not present.
+//
+// If the user cannot be found, then its nonexistence is cached. This is to
+// avoid excessive requests when e.g. backfilling messages from a user that has
+// since been deleted since connecting. If some other error occurs, the cache
+// isn't touched and nil is returned.
+//
+// Otherwise, the cache is updated as you'd expect.
+func (uc *UserCache) Resolve(ctx context.Context, userID string) *discordgo.User {
+	if userID == discordid.DeletedGuildUserID {
+		return &discordid.DeletedGuildUser
+	}
+
+	// Hopefully this isn't too contentious?
+	uc.lock.Lock()
+	defer uc.lock.Unlock()
+
+	cachedUser, present := uc.cache[userID]
+	if cachedUser != nil {
+		return cachedUser
+	} else if present {
+		// If a `nil` is present in the map, then we already know that the user
+		// doesn't exist.
+		return nil
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "resolve user").
+		Str("user_id", userID).Logger()
+
+	log.Trace().Msg("Fetching user")
+	user, err := uc.session.User(userID)
+
+	var restError *discordgo.RESTError
+	if errors.As(err, &restError) && restError.Response.StatusCode == http.StatusNotFound {
+		log.Info().Msg("Tried to resolve a user that doesn't exist, caching nonexistence")
+		uc.cache[userID] = nil
+
+		return nil
+	} else if err != nil {
+		log.Err(err).Msg("Failed to resolve user")
+		return nil
+	}
+
+	uc.cache[userID] = user
+
+	return user
+}

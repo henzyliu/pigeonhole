@@ -1,0 +1,409 @@
+// mautrix-discord - A Matrix-Discord puppeting bridge.
+// Copyright (C) 2026 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+package msgconv
+
+import (
+	"context"
+	"fmt"
+	"html"
+	"math"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-discord/pkg/connector/discorddb"
+	"go.mau.fi/mautrix-discord/pkg/discordid"
+	"go.mau.fi/mautrix-discord/pkg/router"
+)
+
+type astDiscordTag struct {
+	ast.BaseInline
+	ctx    context.Context
+	source *bridgev2.UserLogin
+	portal *bridgev2.Portal
+	id     int64
+}
+
+var _ ast.Node = (*astDiscordTag)(nil)
+var astKindDiscordTag = ast.NewNodeKind("DiscordTag")
+
+func (n *astDiscordTag) Dump(source []byte, level int) {
+	ast.DumpHelper(n, source, level, nil, nil)
+}
+
+func (n *astDiscordTag) Kind() ast.NodeKind {
+	return astKindDiscordTag
+}
+
+type astDiscordUserMention struct {
+	astDiscordTag
+	hasNick bool
+}
+
+func (n *astDiscordUserMention) String() string {
+	if n.hasNick {
+		return fmt.Sprintf("<@!%d>", n.id)
+	}
+	return fmt.Sprintf("<@%d>", n.id)
+}
+
+type astDiscordRoleMention struct {
+	astDiscordTag
+}
+
+func (n *astDiscordRoleMention) String() string {
+	return fmt.Sprintf("<@&%d>", n.id)
+}
+
+type astDiscordChannelMention struct {
+	astDiscordTag
+
+	guildID int64
+	name    string
+}
+
+func (n *astDiscordChannelMention) String() string {
+	if n.guildID != 0 {
+		return fmt.Sprintf("<#%d:%d:%s>", n.id, n.guildID, n.name)
+	}
+	return fmt.Sprintf("<#%d>", n.id)
+}
+
+type discordTimestampStyle rune
+
+func (dts discordTimestampStyle) Format() string {
+	switch dts {
+	case 't':
+		return "15:04 MST"
+	case 'T':
+		return "15:04:05 MST"
+	case 'd':
+		return "2006-01-02 MST"
+	case 'D':
+		return "2 January 2006 MST"
+	case 'F':
+		return "Monday, 2 January 2006 15:04 MST"
+	case 'f':
+		fallthrough
+	default:
+		return "2 January 2006 15:04 MST"
+	}
+}
+
+type astDiscordTimestamp struct {
+	astDiscordTag
+
+	timestamp int64
+	style     discordTimestampStyle
+}
+
+func (n *astDiscordTimestamp) String() string {
+	if n.style == 'f' {
+		return fmt.Sprintf("<t:%d>", n.timestamp)
+	}
+	return fmt.Sprintf("<t:%d:%c>", n.timestamp, n.style)
+}
+
+type astDiscordCustomEmoji struct {
+	astDiscordTag
+	name     string
+	animated bool
+}
+
+func (n *astDiscordCustomEmoji) String() string {
+	if n.animated {
+		return fmt.Sprintf("<a%s%d>", n.name, n.id)
+	}
+	return fmt.Sprintf("<%s%d>", n.name, n.id)
+}
+
+type discordTagParser struct{}
+
+type customEmojiMXCProvider interface {
+	GetCustomEmojiMXC(ctx context.Context, emojiID, name string, animated bool) (id.ContentURIString, error)
+}
+
+// (This interface is to avoid an import cycle.)
+type roleInfoProvider interface {
+	GetRoleByID(ctx context.Context, guildID, roleID string) (*discorddb.Role, error)
+}
+
+// Regex to match everything in https://discord.com/developers/docs/reference#message-formatting
+var discordTagRegex = regexp.MustCompile(`<(a?:\w+:|@[!&]?|#|t:)(\d+)(?::([tTdDfFR])|(\d+):(.+?))?>`)
+var defaultDiscordTagParser = &discordTagParser{}
+
+func (s *discordTagParser) Trigger() []byte {
+	return []byte{'<'}
+}
+
+var parserContextGoContext = parser.NewContextKey()
+var parserContextPortal = parser.NewContextKey()
+var parserContextUserLogin = parser.NewContextKey()
+
+func (s *discordTagParser) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
+	portal := pc.Get(parserContextPortal).(*bridgev2.Portal)
+	source := pc.Get(parserContextUserLogin).(*bridgev2.UserLogin)
+	//before := block.PrecendingCharacter()
+	line, _ := block.PeekLine()
+	match := discordTagRegex.FindSubmatch(line)
+	if match == nil {
+		return nil
+	}
+	//seg := segment.WithStop(segment.Start + len(match[0]))
+	block.Advance(len(match[0]))
+
+	id, err := strconv.ParseInt(string(match[2]), 10, 64)
+	if err != nil {
+		return nil
+	}
+	tag := astDiscordTag{id: id, source: source, portal: portal, ctx: pc.Get(parserContextGoContext).(context.Context)}
+	tagName := string(match[1])
+	switch {
+	case tagName == "@":
+		return &astDiscordUserMention{astDiscordTag: tag}
+	case tagName == "@!":
+		return &astDiscordUserMention{astDiscordTag: tag, hasNick: true}
+	case tagName == "@&":
+		return &astDiscordRoleMention{astDiscordTag: tag}
+	case tagName == "#":
+		var guildID int64
+		var channelName string
+		if len(match[4]) > 0 && len(match[5]) > 0 {
+			guildID, _ = strconv.ParseInt(string(match[4]), 10, 64)
+			channelName = string(match[5])
+		}
+		return &astDiscordChannelMention{astDiscordTag: tag, guildID: guildID, name: channelName}
+	case tagName == "t:":
+		var style discordTimestampStyle
+		if len(match[3]) == 0 {
+			style = 'f'
+		} else {
+			style = discordTimestampStyle(match[3][0])
+		}
+		return &astDiscordTimestamp{
+			astDiscordTag: tag,
+			timestamp:     id,
+			style:         style,
+		}
+	case strings.HasPrefix(tagName, ":"):
+		return &astDiscordCustomEmoji{name: tagName, astDiscordTag: tag}
+	case strings.HasPrefix(tagName, "a:"):
+		return &astDiscordCustomEmoji{name: tagName[1:], astDiscordTag: tag, animated: true}
+	default:
+		return nil
+	}
+}
+
+func (s *discordTagParser) CloseBlock(parent ast.Node, pc parser.Context) {
+	// nothing to do
+}
+
+type discordTagHTMLRenderer struct{}
+
+var defaultDiscordTagHTMLRenderer = &discordTagHTMLRenderer{}
+
+func (r *discordTagHTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(astKindDiscordTag, r.renderDiscordMention)
+}
+
+func relativeTimeFormat(ts time.Time) string {
+	now := time.Now()
+	if ts.Year() >= 2262 {
+		return "date out of range for relative format"
+	}
+	duration := ts.Sub(now)
+	word := "in %s"
+	if duration < 0 {
+		duration = -duration
+		word = "%s ago"
+	}
+	var count int
+	var unit string
+	switch {
+	case duration < time.Second:
+		count = int(duration.Milliseconds())
+		unit = "millisecond"
+	case duration < time.Minute:
+		count = int(math.Round(duration.Seconds()))
+		unit = "second"
+	case duration < time.Hour:
+		count = int(math.Round(duration.Minutes()))
+		unit = "minute"
+	case duration < 24*time.Hour:
+		count = int(math.Round(duration.Hours()))
+		unit = "hour"
+	case duration < 30*24*time.Hour:
+		count = int(math.Round(duration.Hours() / 24))
+		unit = "day"
+	case duration < 365*24*time.Hour:
+		count = int(math.Round(duration.Hours() / 24 / 30))
+		unit = "month"
+	default:
+		count = int(math.Round(duration.Hours() / 24 / 365))
+		unit = "year"
+	}
+	var diff string
+	if count == 1 {
+		diff = fmt.Sprintf("a %s", unit)
+	} else {
+		diff = fmt.Sprintf("%d %ss", count, unit)
+	}
+	return fmt.Sprintf(word, diff)
+}
+
+func (r *discordTagHTMLRenderer) renderDiscordMention(w util.BufWriter, source []byte, n ast.Node, entering bool) (status ast.WalkStatus, err error) {
+	status = ast.WalkContinue
+	if !entering {
+		return
+	}
+
+	switch node := n.(type) {
+	case *astDiscordUserMention:
+		var mxid id.UserID
+		var name string
+		discordUserID := strconv.FormatInt(node.id, 10)
+		bridge := node.portal.Bridge
+
+		if ghost, _ := bridge.GetGhostByID(node.ctx, discordid.MakeUserID(discordUserID)); ghost != nil {
+			// TODO: Provide some kind of config option for this in the future.
+			// msgconv being in its own package means we can't just reach into
+			// the config. For now, avoid.
+			//
+			// if ghost.Name == "" {
+			// 	ghost.UpdateInfoIfNecessary(ctx, node.source, bridgev2.RemoteEventUnknown)
+			// }
+			mxid = ghost.Intent.GetMXID()
+			name = ghost.Name
+		}
+		if discordUserID == discordid.ParseUserLoginID(node.source.ID) {
+			// Mentioning ourselves.
+			mxid = node.source.UserMXID
+		} else if ul := node.portal.Bridge.GetCachedUserLoginByID(discordid.MakeUserLoginID(discordUserID)); ul != nil {
+			// If the Discord user mentioned corresponds to someone else logged
+			// into the bridge, prefer their "real" MXID instead of the
+			// ghost's.
+			mxid = ul.UserMXID
+		}
+
+		if mxid != "" {
+			if name == "" {
+				name = fmt.Sprintf("@%d", node.id)
+			}
+			_, _ = fmt.Fprintf(w, `<a href="%s">%s</a>`, mxid.URI().MatrixToURL(), html.EscapeString(name))
+		} else {
+			_, _ = fmt.Fprintf(w, "&lt;@%d&gt;", node.id)
+		}
+		return
+	case *astDiscordRoleMention:
+		meta, _ := node.portal.Metadata.(*discordid.PortalMetadata)
+		if meta != nil && meta.GuildID != "" {
+			if provider, ok := node.portal.Bridge.Network.(roleInfoProvider); ok {
+				role, roleErr := provider.GetRoleByID(node.ctx, meta.GuildID, strconv.FormatInt(node.id, 10))
+				if roleErr != nil {
+					node.portal.Log.Warn().
+						Err(roleErr).
+						Str("guild_id", meta.GuildID).
+						Int64("role_id", node.id).
+						Msg("Failed to resolve role while rendering mention")
+				} else if role != nil {
+					_, _ = fmt.Fprintf(w, `<font color="#%06x"><strong>@%s</strong></font>`, role.Color, html.EscapeString(role.Name))
+					return
+				}
+			}
+		}
+	case *astDiscordChannelMention:
+		rtr, ok := node.source.Client.(router.Router)
+
+		if ok {
+			var r *router.Route
+			mentionedChannelID := strconv.FormatInt(node.id, 10)
+			r, err = rtr.Route(node.ctx, mentionedChannelID)
+
+			if err == nil && !r.Uncertain {
+				if portal, _ := node.portal.Bridge.GetExistingPortalByKey(node.ctx, r.PortalKey); portal != nil {
+					if portal.MXID != "" {
+						_, _ = fmt.Fprintf(w, `<a href="%s">%s</a>`, portal.MXID.URI(portal.Bridge.Matrix.ServerName()).MatrixToURL(), html.EscapeString(portal.Name))
+					} else {
+						_, _ = w.WriteString(portal.Name)
+					}
+					return
+				}
+			} else if err != nil {
+				node.portal.Log.Err(err).Msg("Failed to route mentioned channel")
+			}
+		}
+	case *astDiscordCustomEmoji:
+		if resolver, ok := node.portal.Bridge.Network.(customEmojiMXCProvider); ok {
+			reactionMXC, resolveErr := resolver.GetCustomEmojiMXC(node.ctx, strconv.FormatInt(node.id, 10), node.name, node.animated)
+
+			if resolveErr != nil {
+				node.portal.Log.Warn().Err(resolveErr).Int64("emoji_id", node.id).Msg("Failed to resolve custom emoji while rendering message")
+			} else if reactionMXC != "" {
+				attrs := "data-mx-emoticon"
+				if node.animated {
+					attrs += " data-mau-animated-emoji"
+				}
+
+				_, _ = fmt.Fprintf(w, `<img %[3]s src="%[1]s" alt="%[2]s" title="%[2]s" height="32"/>`, string(reactionMXC), node.name, attrs)
+				return
+			}
+		}
+	case *astDiscordTimestamp:
+		ts := time.Unix(node.timestamp, 0).UTC()
+		var formatted string
+		if node.style == 'R' {
+			formatted = relativeTimeFormat(ts)
+		} else {
+			formatted = ts.Format(node.style.Format())
+		}
+		// https://github.com/matrix-org/matrix-spec-proposals/pull/3160
+		const fullDatetimeFormat = "2006-01-02T15:04:05.000-0700"
+		fullRFC := ts.Format(fullDatetimeFormat)
+		fullHumanReadable := ts.Format(discordTimestampStyle('F').Format())
+		_, _ = fmt.Fprintf(w, `<time title="%s" datetime="%s" data-discord-style="%c"><strong>%s</strong></time>`, fullHumanReadable, fullRFC, node.style, formatted)
+	}
+	stringifiable, ok := n.(fmt.Stringer)
+	if ok {
+		_, _ = w.WriteString(stringifiable.String())
+	} else {
+		_, _ = w.Write(source)
+	}
+	return
+}
+
+type discordTag struct{}
+
+var ExtDiscordTag = &discordTag{}
+
+func (e *discordTag) Extend(m goldmark.Markdown) {
+	m.Parser().AddOptions(parser.WithInlineParsers(
+		util.Prioritized(defaultDiscordTagParser, 600),
+	))
+	m.Renderer().AddOptions(renderer.WithNodeRenderers(
+		util.Prioritized(defaultDiscordTagHTMLRenderer, 600),
+	))
+}

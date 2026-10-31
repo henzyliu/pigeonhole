@@ -1,0 +1,82 @@
+# Configuration options related to Discord guilds (also known as "servers").
+guilds:
+    # UNSTABLE: The IDs of the guilds to bridge. This is a stopgap measure
+    # during bridge development. If no guild IDs are specified, then no guilds
+    # are bridged at all.
+    bridging_guild_ids: []
+
+    # Should guild channel portals take on the guild icon as their avatars?
+    guild_avatars_in_rooms: false
+
+# Should the bridge refuse to send direct messages to recipients the user isn't
+# friends with on Discord? Discord generally considers this to be a "risky"
+# action.
+forbid_dming_strangers: true
+
+# Template for Matrix room names created for Discord channels, except for 1:1
+# DMs. 1:1 DMs intentionally do not use this template as their room metadata is
+# derived from the other user's ghost (when private_chat_portal_meta is enabled).
+#
+# Available variables:
+#   .Name - The Discord channel name.
+#   .ParentName - The parent channel/category name, if any.
+#   .GuildName - The guild name for guild channels.
+#   .Type - The raw Discord channel type.
+#   .NSFW - Whether the channel is marked NSFW.
+#   .IsDM - Whether the channel is a 1:1 DM.
+#   .IsGroupDM - Whether the channel is a group DM.
+#   .IsCategory - Whether the channel is a guild category.
+#   .IsGuildChannel - Whether the channel belongs to a guild.
+#   .Recipients - Other members in group DMs. Not safe on multi-user instances.
+#                 Takes an optional limit, as {{.Recipients 4}}
+channel_name_template: "{{if and .IsGuildChannel (not .IsCategory)}}#{{end}}{{.Name}}"
+
+# Should incoming custom emoji reactions be bridged as mxc:// URIs?
+# If false, they are bridged as :shortcode: instead.
+custom_emoji_reactions: true
+
+# Should a per-message profile (sender display name and avatar) be
+# _unconditionally_ attached to every bridged Discord message part? This can
+# help some clients display message authorship properly (specifically, during
+# user-triggered backfill that involves yet-to-be-seen Discord users).
+per_message_profiles_on_every_message_hack: false
+
+# Should we log when messages from unbridged guild channels are dropped? This
+# only includes metadata such as channel and message ID.
+log_when_dropping_messages: true
+
+# Static proxy address (HTTP or SOCKS5) for connecting to Discord.
+proxy:
+# HTTP endpoint to request a new proxy address from, for dynamically assigned
+# proxies. The endpoint must return a JSON body with a string field called
+# proxy_url. It is re-fetched on every (re)connect so each session egresses from
+# one consistent IP.
+get_proxy_from:
+# Should avatar, icon, and attachment downloads also go through the proxy? The
+# gateway websocket and REST API always use it (when proxying).
+proxy_media: false
+# When a proxy is configured, should the "machine" bridgev2 login flow
+# configure its HTTP client with the proxy?
+#
+# (The "machine" login flow is the reverse engineered native login flow, which
+# employs a state machine - hence the name. It does not use web views except
+# for CAPTCHA handling, which occurs dynamically and only when needed.)
+#
+# Disabling this setting alone will make the bridge connect to Discord directly
+# during login, despite the resulting session using the proxy. Leaving this
+# enabled is safest.
+proxy_login_machine: true
+# When a proxy is configured, should the "remoteauth" bridgev2 login flow
+# configure its HTTP client with the proxy?
+#
+# (The "remoteauth" login flow is the QR-code-based login process that connects
+# to a WebSocket gateway entirely dedicated to this login process.)
+proxy_login_remoteauth: true
+
+# Should "Account Standing" information (viewable under the Account tab on
+# Discord) be fetched and incorporated into the "info" field of bridge states?
+#
+# Personally identifiable information such as message or channel identifiers,
+# message content, or attachment data are never incorporated into the reported
+# information.
+report_scrubbed_account_standing: false

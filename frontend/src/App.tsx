@@ -25,6 +25,7 @@ const CATEGORIES: {id: Category; label: string; alwaysShown?: boolean}[] = [
 
 
 const NO_ONE: string[] = [];
+const NO_PRESENCE: inbox.PresenceInfo = {dms: {}, groups: {}};
 
 // signedOutOf reports whether every account on a network has been signed
 // out by it, so nothing new arrives in its chats.
@@ -146,6 +147,10 @@ export default function App() {
     const [messageTick, setMessageTick] = useState(0);
     // Who is typing in each chat, by room ID.
     const [typing, setTyping] = useState<Record<string, string[]>>({});
+    // Discord statuses: the friend's in each DM ("online", "idle" or "dnd"),
+    // and how many friends are online in each group, by room ID.
+    const [presence, setPresence] = useState<inbox.PresenceInfo>(NO_PRESENCE);
+    const loadPresence = useCallback(() => Go.Presence().then(p => setPresence(p ?? NO_PRESENCE)).catch(console.error), []);
     const chatsRef = useRef(chats);
     chatsRef.current = chats;
 
@@ -174,6 +179,7 @@ export default function App() {
     useEffect(() => {
         loadChats();
         loadAccounts();
+        loadPresence();
         Go.StartupError().then(e => e && setStartError(e));
         // Chat list changes arrive in bursts during sync; coalesce them.
         let chatTimer: number | undefined;
@@ -184,6 +190,10 @@ export default function App() {
             }
             if (change.kind === 'typing') {
                 Go.Typing().then(t => setTyping(t ?? {})).catch(console.error);
+            }
+            // A new DM can come with a status too.
+            if (change.kind === 'presence' || change.kind === 'rooms') {
+                loadPresence();
             }
             if (change.kind === 'messages' && change.roomId === selectedRef.current) {
                 setMessageTick(t => t + 1);
@@ -452,7 +462,7 @@ export default function App() {
                 {(() => {
                     const list = (
                         <ChatList chats={visibleChats} selected={selected} highlighted={highlighted} onSelect={setSelected}
-                                  emptyText={query.trim() ? 'No chats match.' : emptyText} typing={typing}
+                                  emptyText={query.trim() ? 'No chats match.' : emptyText} typing={typing} presence={presence}
                                   onSetHidden={(roomId, hidden) => setChatHidden(roomId, hidden).catch(console.error)}
                                   onSetMuted={(roomId, muted) => Go.SetChatMuted(roomId, muted).then(loadChats).catch(console.error)}
                                   onSetPinned={(roomId, pinned) => Go.SetChatPinned(roomId, pinned).then(loadChats).catch(console.error)}/>
@@ -485,6 +495,8 @@ export default function App() {
                               jumpTo={jump?.roomId === selectedChat.roomId ? jump.eventId : undefined}
                               chat={selectedChat} tick={messageTick} spellCheck={spellCheck}
                               typing={typing[selectedChat.roomId] ?? NO_ONE}
+                              presence={presence.dms[selectedChat.roomId]}
+                              friendsOnline={presence.groups[selectedChat.roomId]}
                               signedOut={signedOutOf(accounts, selectedChat.network)}
                               onSignIn={() => openSignIn(selectedChat.network)}
                               onSetHidden={hidden => setChatHidden(selectedChat.roomId, hidden)}/>

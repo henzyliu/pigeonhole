@@ -14,6 +14,7 @@ export default function ChatList(props: {
     onSetPinned: (roomId: string, pinned: boolean) => void;
     emptyText: string;
     typing: Record<string, string[]>;
+    presence: inbox.PresenceInfo;
 }) {
     // The chat's ⋯ menu, shown on hover. Acting from here doesn't open the
     // chat, so nothing is marked as read.
@@ -36,7 +37,7 @@ export default function ChatList(props: {
                 <li key={chat.roomId}
                     className={`chat-row ${chat.roomId === props.selected ? 'selected' : ''} ${chat.roomId === props.highlighted ? 'highlighted' : ''} ${chat.unread > 0 ? 'unread' : ''} ${menu?.chat.roomId === chat.roomId ? 'menu-open' : ''}`}
                     onClick={() => props.onSelect(chat.roomId)}>
-                    <Avatar name={chat.name} src={chat.avatar} size={44} network={chat.network}/>
+                    <Avatar name={chat.name} src={chat.avatar} size={44} network={chat.network} presence={props.presence.dms[chat.roomId]} online={props.presence.groups[chat.roomId]}/>
                     <div className="chat-row-body">
                         <div className="chat-row-top">
                             <span className="chat-name">{chat.name || 'Unnamed chat'}</span>

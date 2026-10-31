@@ -3,6 +3,7 @@ module unified-inbox
 go 1.26.0
 
 require (
+	github.com/bwmarrin/discordgo v0.27.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/rs/zerolog v1.35.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
@@ -29,7 +30,6 @@ require (
 	github.com/beeper/argo-go v1.1.2 // indirect
 	github.com/beeper/poly1305 v0.0.0-20250815183548-d4eede7bbf3c // indirect
 	github.com/bep/debounce v1.2.1 // indirect
-	github.com/bwmarrin/discordgo v0.27.0 // indirect
 	github.com/bytemare/cryptotools v0.0.0-20210309005813-f9985b05742f // indirect
 	github.com/bytemare/opaque v0.0.0-20210310201842-16a10d180656 // indirect
 	github.com/bytemare/voprf v0.0.0-20210221170502-f0af88d24d16 // indirect
@@ -95,5 +95,7 @@ require (
 replace github.com/imroc/req/v3 => github.com/beeper/req/v3 v3.0.0-20260925135712-b49593750e56
 
 replace go.mau.fi/mautrix-meta => ./third_party/mautrix-meta
+
+replace go.mau.fi/mautrix-discord => ./third_party/mautrix-discord
 
 replace github.com/bwmarrin/discordgo => github.com/beeper/discordgo v0.0.0-20261016105259-972d950892bf

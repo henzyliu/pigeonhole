@@ -250,7 +250,25 @@ button.row-menu-button:hover { color: var(--fg); }
     display: grid; place-items: center; padding: 2px;
     border-radius: 50%; background: var(--bg-side);
 }
+/* The status dot sits top-right (the network badge has bottom-right), with
+   a ring in the background colour so it stands off the photo. */
+.avatar-presence {
+    position: absolute; right: -2px; top: -2px; box-sizing: content-box;
+    padding: 2px; border-radius: 50%; background: var(--bg-side);
+}
+/* How many friends are online in a Discord group, in the same corner. */
+.avatar-online {
+    position: absolute; right: -4px; top: -4px; min-width: 16px; height: 16px; padding: 0 4px;
+    box-sizing: border-box; border-radius: 8px; border: 2px solid var(--bg-side);
+    background: #23A55A; color: #fff; font-size: 9.5px; font-weight: 700; line-height: 12px; text-align: center;
+}
+.chat-row.selected .avatar-online { border-color: var(--bg-selected); }
+.chat-row:hover:not(.selected) .avatar-online { border-color: var(--bg-hover); }
+.thread-header .avatar-online { border-color: var(--bg); }
 .chat-row.selected .avatar-net { background: var(--bg-selected); }
+.chat-row.selected .avatar-presence { background: var(--bg-selected); }
+.chat-row:hover:not(.selected) .avatar-presence { background: var(--bg-hover); }
+.thread-header .avatar-presence { background: var(--bg); }
 .chat-row:hover:not(.selected) .avatar-net { background: var(--bg-hover); }
 
 /* Thread */
@@ -759,3 +777,5 @@ kbd {
 }
 .mention-suggest li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .mention-suggest li.active { background: var(--bg-hover); }
+.mention-suggest .avatar-presence { padding: 1.5px; background: var(--bg); }
+.mention-suggest li.active .avatar-presence { background: var(--bg-hover); }

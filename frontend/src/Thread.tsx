@@ -1,6 +1,6 @@
 import {ClipboardEvent, CSSProperties, Fragment, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {errorText, gifs, Go, inbox, NETWORK_LABELS, OnFileDrop, OnFileDropOff} from './api';
-import Avatar from './Avatar';
+import Avatar, {PRESENCE_LABELS} from './Avatar';
 import {linkify, openLink, typingText} from './links';
 import EmojiPicker from './EmojiPicker';
 import GifPicker from './GifPicker';
@@ -16,6 +16,10 @@ export default function Thread(props: {
     chat: inbox.Chat;
     tick: number;
     typing: string[];
+    // The other person's Discord status, in a Discord DM, and how many
+    // friends are online, in a Discord group.
+    presence?: string;
+    friendsOnline?: number;
     spellCheck?: boolean;
     signedOut: boolean;
     onSignIn: () => void;
@@ -496,10 +500,14 @@ export default function Thread(props: {
     return (
         <section className="thread">
             <header className="thread-header">
-                <Avatar name={chat.name} src={chat.avatar} size={36}/>
+                <Avatar name={chat.name} src={chat.avatar} size={36} presence={props.presence} online={chat.isDm ? 0 : props.friendsOnline}/>
                 <div>
                     <div className="thread-title">{chat.name}</div>
-                    <div className="thread-subtitle"><NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}</div>
+                    <div className="thread-subtitle">
+                        <NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}
+                        {props.presence && ` · ${PRESENCE_LABELS[props.presence] ?? props.presence}`}
+                        {!chat.isDm && !!props.friendsOnline && ` · ${props.friendsOnline} ${props.friendsOnline === 1 ? 'friend' : 'friends'} online`}
+                    </div>
                 </div>
                 <button className={`icon-button thread-shared ${sharedOpen ? 'active' : ''}`} title="Photos, files and links in this chat"
                         aria-label="Shared in this chat" aria-expanded={sharedOpen} onClick={() => setSharedOpen(o => !o)}>
@@ -620,7 +628,7 @@ export default function Thread(props: {
                                     pickMention(m);
                                 }}
                                 onMouseEnter={() => setSuggestIndex(i)}>
-                                <Avatar name={m.name} src={m.avatar} size={24}/>
+                                <Avatar name={m.name} src={m.avatar} size={24} presence={m.presence}/>
                                 <span>{m.name}</span>
                             </li>
                         ))}

@@ -253,6 +253,7 @@ export namespace inbox {
 	    userId: string;
 	    name: string;
 	    avatar: string;
+	    presence?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Member(source);
@@ -263,6 +264,7 @@ export namespace inbox {
 	        this.userId = source["userId"];
 	        this.name = source["name"];
 	        this.avatar = source["avatar"];
+	        this.presence = source["presence"];
 	    }
 	}
 	export class Mention {
@@ -399,6 +401,20 @@ export namespace inbox {
 	        this.name = source["name"];
 	        this.avatar = source["avatar"];
 	        this.roomId = source["roomId"];
+	    }
+	}
+	export class PresenceInfo {
+	    dms: Record<string, string>;
+	    groups: Record<string, number>;
+	
+	    static createFrom(source: any = {}) {
+	        return new PresenceInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dms = source["dms"];
+	        this.groups = source["groups"];
 	    }
 	}
 	
