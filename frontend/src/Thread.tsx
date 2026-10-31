@@ -54,6 +54,21 @@ export default function Thread(props: {
         Go.GIFsEnabled().then(setGifsEnabled).catch(() => setGifsEnabled(false));
     }, []);
     const closeGifs = useCallback(() => setPickingGif(false), []);
+    // The emoji picker, opened from the button beside the message box; the
+    // chosen emoji goes in where the cursor was.
+    const [emojiFrom, setEmojiFrom] = useState<DOMRect | null>(null);
+    const closeEmoji = useCallback(() => setEmojiFrom(null), []);
+    const insertEmoji = (emoji: string) => {
+        const el = composer.current;
+        const start = el?.selectionStart ?? draft.length;
+        const end = el?.selectionEnd ?? start;
+        setDraft(draft.slice(0, start) + emoji + draft.slice(end));
+        setEmojiFrom(null);
+        window.setTimeout(() => {
+            el?.focus();
+            el?.setSelectionRange(start + emoji.length, start + emoji.length);
+        });
+    };
     const sendGif = (gif: gifs.GIF) => {
         setPickingGif(false);
         setError('');
@@ -616,6 +631,19 @@ export default function Thread(props: {
                         <path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l8.6-8.6a3.7 3.7 0 015.2 5.2l-8.6 8.6a1.8 1.8 0 01-2.6-2.6l7.9-7.9"/>
                     </svg>
                 </button>
+                <button className={`icon-button emoji-button ${emojiFrom ? 'active' : ''}`} title="Emoji" aria-label="Emoji"
+                        aria-expanded={!!emojiFrom}
+                        // The picker closes on clicks outside it; this button toggles it instead.
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={e => setEmojiFrom(emojiFrom ? null : e.currentTarget.getBoundingClientRect())}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                         strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/>
+                        <path d="M9 9.5h.01M15 9.5h.01"/>
+                    </svg>
+                </button>
+                {emojiFrom && <EmojiPicker anchor={emojiFrom} onPick={insertEmoji} onClose={closeEmoji}/>}
                 {gifsEnabled && !editing && (
                     <button className={`icon-button gif-button ${pickingGif ? 'active' : ''}`} title="Send a GIF"
                             aria-label="Send a GIF" aria-expanded={pickingGif} onClick={() => setPickingGif(p => !p)}>GIF</button>

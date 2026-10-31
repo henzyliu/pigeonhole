@@ -468,7 +468,8 @@ button.viewer-nav.next { right: 14px; }
 .composer .gif-button {
     height: 38px; padding: 0 8px; border-radius: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
 }
-.composer .gif-button.active { color: var(--accent); }
+.composer .gif-button.active, .composer .emoji-button.active { color: var(--accent); }
+.composer .emoji-button { width: 38px; height: 38px; border-radius: 50%; }
 /* The GIF picker floats above the message box. */
 .gif-picker {
     position: absolute; bottom: calc(100% - 4px); left: 20px; z-index: 20;
