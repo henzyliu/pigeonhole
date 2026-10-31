@@ -25,7 +25,7 @@ const CATEGORIES: {id: Category; label: string; alwaysShown?: boolean}[] = [
 
 
 const NO_ONE: string[] = [];
-const NO_PRESENCE: inbox.PresenceInfo = {dms: {}, groups: {}};
+const NO_PRESENCE = new inbox.PresenceInfo({dms: {}, groups: {}, whatsapp: {}});
 
 // signedOutOf reports whether every account on a network has been signed
 // out by it, so nothing new arrives in its chats.
@@ -500,6 +500,7 @@ export default function App() {
                               typing={typing[selectedChat.roomId] ?? NO_ONE}
                               presence={presence.dms[selectedChat.roomId]}
                               friendsOnline={presence.groups[selectedChat.roomId]}
+                              seen={presence.whatsapp[selectedChat.roomId]}
                               signedOut={signedOutOf(accounts, selectedChat.network)}
                               onSignIn={() => openSignIn(selectedChat.network)}
                               onSetHidden={hidden => setChatHidden(selectedChat.roomId, hidden)}/>

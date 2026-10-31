@@ -103,13 +103,16 @@ type PresenceInfo struct {
 	// Groups counts the friends online (including idle and do not disturb)
 	// in each Discord group chat, by room ID.
 	Groups map[string]int `json:"groups"`
+	// WhatsApp gives the contact's presence in each WhatsApp DM that's been
+	// opened, by room ID; see wapresence.go.
+	WhatsApp map[string]Seen `json:"whatsapp"`
 }
 
 // Presence gives the Discord statuses to show. Offline people, and chats on
 // accounts that aren't connected right now (whose statuses may be out of
 // date), are left out.
 func (s *Service) Presence(ctx context.Context) (*PresenceInfo, error) {
-	out := &PresenceInfo{DMs: map[string]string{}, Groups: map[string]int{}}
+	out := &PresenceInfo{DMs: map[string]string{}, Groups: map[string]int{}, WhatsApp: s.whatsAppSeen()}
 	n, ok := s.networks["discord"]
 	if !ok || !n.started.Load() {
 		return out, nil

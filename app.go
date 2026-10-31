@@ -30,6 +30,9 @@ type App struct {
 	viewLock   sync.Mutex
 	activeRoom string
 	focused    bool
+	// viewing is the chat on screen in a focused window, last told to the
+	// bridges ("" for none).
+	viewing string
 
 	dataDir      string
 	settingsLock sync.Mutex
@@ -159,9 +162,19 @@ func (a *App) setupNotifications() {
 // SetView tells the backend which chat is open and whether the window has
 // focus, so we don't notify about messages the user is already reading.
 func (a *App) SetView(roomID string, focused bool) {
+	viewing := ""
+	if focused {
+		viewing = roomID
+	}
 	a.viewLock.Lock()
 	a.activeRoom, a.focused = roomID, focused
+	changed := viewing != a.viewing
+	a.viewing = viewing
 	a.viewLock.Unlock()
+	// WhatsApp shows you as online while one of its chats is on screen.
+	if changed {
+		go a.svc.ViewingChat(a.ctx, viewing)
+	}
 	if focused && roomID != "" {
 		_ = runtime.RemoveDeliveredNotification(a.ctx, roomID)
 	}
@@ -310,8 +323,9 @@ func (a *App) Refresh() bool { return a.svc.Reconnect("refresh") }
 // Typing lists who is typing in each chat right now, by room ID.
 func (a *App) Typing() (map[string][]string, error) { return a.svc.Typing(a.ctx) }
 
-// Presence gives the Discord statuses to show: the other person's in each
-// DM, and how many friends are online in each group.
+// Presence gives the statuses to show: the other person's in each Discord
+// DM, how many friends are online in each Discord group, and whether the
+// contact in each opened WhatsApp DM is online or when they were last seen.
 func (a *App) Presence() (*inbox.PresenceInfo, error) { return a.svc.Presence(a.ctx) }
 
 // SetDraft saves the unsent message typed in a chat (and the message it

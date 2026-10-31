@@ -18,6 +18,7 @@ import (
 	whatsapp "go.mau.fi/mautrix-whatsapp/pkg/connector"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
+	"go.mau.fi/whatsmeow"
 	"gopkg.in/yaml.v3"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
@@ -91,6 +92,11 @@ type Service struct {
 	// presence holds Discord friends' statuses, by account and then user;
 	// see presence.go.
 	presence map[string]map[string]string
+	// WhatsApp contacts' presence, by contact; the contact of each opened
+	// chat, by room; and the connections already watched (wapresence.go).
+	waSeen    map[string]Seen
+	waRooms   map[string]string
+	waWatched map[*whatsmeow.Client]bool
 }
 
 func New(dataDir string, log zerolog.Logger) (*Service, error) {

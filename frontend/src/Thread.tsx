@@ -20,6 +20,8 @@ export default function Thread(props: {
     // friends are online, in a Discord group.
     presence?: string;
     friendsOnline?: number;
+    // The contact's WhatsApp presence: online, or when last seen.
+    seen?: inbox.Seen;
     spellCheck?: boolean;
     signedOut: boolean;
     onSignIn: () => void;
@@ -500,13 +502,15 @@ export default function Thread(props: {
     return (
         <section className="thread">
             <header className="thread-header">
-                <Avatar name={chat.name} src={chat.avatar} size={36} presence={props.presence} online={chat.isDm ? 0 : props.friendsOnline}/>
+                <Avatar name={chat.name} src={chat.avatar} size={36} presence={props.seen?.online ? 'online' : props.presence}
+                        online={chat.isDm ? 0 : props.friendsOnline}/>
                 <div>
                     <div className="thread-title">{chat.name}</div>
                     <div className="thread-subtitle">
                         <NetworkIcon network={chat.network} size={13}/>{NETWORK_LABELS[chat.network] ?? chat.network}
                         {props.presence && ` · ${PRESENCE_LABELS[props.presence] ?? props.presence}`}
                         {!chat.isDm && !!props.friendsOnline && ` · ${props.friendsOnline} ${props.friendsOnline === 1 ? 'friend' : 'friends'} online`}
+                        {props.seen && ` · ${props.seen.online ? 'online' : lastSeenText(props.seen.lastSeen)}`}
                     </div>
                 </div>
                 <button className={`icon-button thread-shared ${sharedOpen ? 'active' : ''}`} title="Photos, files and links in this chat"
@@ -1047,4 +1051,19 @@ function InlineVideo(props: {msg: inbox.Message; onExpand: () => void}) {
             </button>
         </div>
     );
+}
+
+// "last seen today at 3:41 pm", "yesterday at …", "Mon at …" within a
+// week, then the date, as WhatsApp words it.
+function lastSeenText(ts: number): string {
+    const d = new Date(ts);
+    const time = d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+    const today = new Date();
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return `last seen today at ${time}`;
+    if (d.toDateString() === yesterday.toDateString()) return `last seen yesterday at ${time}`;
+    if (today.getTime() - d.getTime() < 7 * 86_400_000) {
+        return `last seen ${d.toLocaleDateString([], {weekday: 'long'})} at ${time}`;
+    }
+    return `last seen ${d.toLocaleDateString([], {day: 'numeric', month: 'short', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric'})}`;
 }

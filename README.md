@@ -56,7 +56,8 @@ GIPHY sees what you search for and your IP address, nothing from your chats.
   GIFs, link previews, typing indicators, read receipts, and editing or
   unsending your messages. Discord shows friends' status (online, idle or do
   not disturb) on DMs and in @mention suggestions, and how many are online in
-  a group.
+  a group. An open WhatsApp chat shows whether the person is online or when
+  they were last seen (and, as in WhatsApp, you show as online while it's open).
 - **Search** across every chat, or within one (⌘F / Ctrl+F), jumping straight
   to the message however far back it is.
 - **Shared panel:** every photo, video, file and link in a chat.

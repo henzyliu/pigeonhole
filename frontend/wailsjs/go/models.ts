@@ -405,9 +405,24 @@ export namespace inbox {
 	        this.roomId = source["roomId"];
 	    }
 	}
+	export class Seen {
+	    online: boolean;
+	    lastSeen: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Seen(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.online = source["online"];
+	        this.lastSeen = source["lastSeen"];
+	    }
+	}
 	export class PresenceInfo {
 	    dms: Record<string, string>;
 	    groups: Record<string, number>;
+	    whatsapp: Record<string, Seen>;
 	
 	    static createFrom(source: any = {}) {
 	        return new PresenceInfo(source);
@@ -417,7 +432,26 @@ export namespace inbox {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.dms = source["dms"];
 	        this.groups = source["groups"];
+	        this.whatsapp = this.convertValues(source["whatsapp"], Seen, true);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	
 	
