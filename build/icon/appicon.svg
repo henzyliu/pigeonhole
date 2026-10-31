@@ -10,20 +10,20 @@
       <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
     <!-- Cubby interiors: darker version of the tile, lighter towards the opening's bottom -->
-    <linearGradient id="hole" x1="0" y1="302" x2="0" y2="782" gradientUnits="userSpaceOnUse">
+    <linearGradient id="hole" x1="0" y1="272" x2="0" y2="752" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#252C8C"/>
       <stop offset="1" stop-color="#44289A"/>
     </linearGradient>
-    <linearGradient id="accent" x1="290" y1="340" x2="730" y2="730" gradientUnits="userSpaceOnUse">
+    <linearGradient id="accent" x1="290" y1="310" x2="730" y2="700" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#3B82F6"/>
       <stop offset="1" stop-color="#7C3AED"/>
     </linearGradient>
     <!-- Pigeon's iridescent neck -->
-    <linearGradient id="neck" x1="586" y1="410" x2="640" y2="470" gradientUnits="userSpaceOnUse">
+    <linearGradient id="neck" x1="586" y1="380" x2="640" y2="440" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#34D399"/>
       <stop offset="1" stop-color="#A78BFA"/>
     </linearGradient>
-    <linearGradient id="feathers" x1="0" y1="362" x2="0" y2="516" gradientUnits="userSpaceOnUse">
+    <linearGradient id="feathers" x1="0" y1="332" x2="0" y2="486" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#F3F5FA"/>
       <stop offset="1" stop-color="#D5DBE8"/>
     </linearGradient>
@@ -38,39 +38,40 @@
   <path fill="url(#bg)" d="M285 100H739A185 185 0 0 1 924 285V739A185 185 0 0 1 739 924H285A185 185 0 0 1 100 739V285A185 185 0 0 1 285 100Z"/>
   <path fill="url(#sheen)" d="M285 100H739A185 185 0 0 1 924 285V739A185 185 0 0 1 739 924H285A185 185 0 0 1 100 739V285A185 185 0 0 1 285 100Z"/>
 
-  <!-- Cabinet shadow and frame -->
-  <path fill="#1E1B4B" fill-opacity="0.18" d="M276 276H748A64 64 0 0 1 812 340V774A64 64 0 0 1 748 838H276A64 64 0 0 1 212 774V340A64 64 0 0 1 276 276Z"/>
-  <path fill="#FFFFFF" d="M276 262H748A64 64 0 0 1 812 326V758A64 64 0 0 1 748 822H276A64 64 0 0 1 212 758V326A64 64 0 0 1 276 262Z"/>
+  <!-- Cabinet shadow and frame (the frame is centred in the tile; the shadow
+       hangs below it) -->
+  <path fill="#1E1B4B" fill-opacity="0.18" d="M276 246H748A64 64 0 0 1 812 310V744A64 64 0 0 1 748 808H276A64 64 0 0 1 212 744V310A64 64 0 0 1 276 246Z"/>
+  <path fill="#FFFFFF" d="M276 232H748A64 64 0 0 1 812 296V728A64 64 0 0 1 748 792H276A64 64 0 0 1 212 728V296A64 64 0 0 1 276 232Z"/>
 
   <!-- Four cubbies -->
-  <path fill="url(#hole)" d="M280 302H468A28 28 0 0 1 496 330V498A28 28 0 0 1 468 526H280A28 28 0 0 1 252 498V330A28 28 0 0 1 280 302Z"/>
-  <path fill="url(#hole)" d="M556 302H744A28 28 0 0 1 772 330V498A28 28 0 0 1 744 526H556A28 28 0 0 1 528 498V330A28 28 0 0 1 556 302Z"/>
-  <path fill="url(#hole)" d="M280 558H468A28 28 0 0 1 496 586V754A28 28 0 0 1 468 782H280A28 28 0 0 1 252 754V586A28 28 0 0 1 280 558Z"/>
-  <path fill="url(#hole)" d="M556 558H744A28 28 0 0 1 772 586V754A28 28 0 0 1 744 782H556A28 28 0 0 1 528 754V586A28 28 0 0 1 556 558Z"/>
+  <path fill="url(#hole)" d="M280 272H468A28 28 0 0 1 496 300V468A28 28 0 0 1 468 496H280A28 28 0 0 1 252 468V300A28 28 0 0 1 280 272Z"/>
+  <path fill="url(#hole)" d="M556 272H744A28 28 0 0 1 772 300V468A28 28 0 0 1 744 496H556A28 28 0 0 1 528 468V300A28 28 0 0 1 556 272Z"/>
+  <path fill="url(#hole)" d="M280 528H468A28 28 0 0 1 496 556V724A28 28 0 0 1 468 752H280A28 28 0 0 1 252 724V556A28 28 0 0 1 280 528Z"/>
+  <path fill="url(#hole)" d="M556 528H744A28 28 0 0 1 772 556V724A28 28 0 0 1 744 752H556A28 28 0 0 1 528 724V556A28 28 0 0 1 556 528Z"/>
 
   <!-- Top-left: a chat bubble -->
-  <path fill="#FFFFFF" d="M326 350H426A34 34 0 0 1 460 384V438A34 34 0 0 1 426 472H352L318 498V470A34 34 0 0 1 292 438V384A34 34 0 0 1 326 350Z"/>
-  <circle cx="340" cy="411" r="12" fill="url(#accent)"/>
-  <circle cx="376" cy="411" r="12" fill="url(#accent)"/>
-  <circle cx="412" cy="411" r="12" fill="url(#accent)"/>
+  <path fill="#FFFFFF" d="M326 320H426A34 34 0 0 1 460 354V408A34 34 0 0 1 426 442H352L318 468V440A34 34 0 0 1 292 408V354A34 34 0 0 1 326 320Z"/>
+  <circle cx="340" cy="381" r="12" fill="url(#accent)"/>
+  <circle cx="376" cy="381" r="12" fill="url(#accent)"/>
+  <circle cx="412" cy="381" r="12" fill="url(#accent)"/>
 
   <!-- Top-right: a pigeon, facing left: small head, puffed iridescent chest,
        two dark wing bars and a dark-tipped tail -->
-  <path fill="#9AA3BC" d="M734 452L766 440L764 478L736 482Z"/>
-  <path fill="#4B5470" d="M756 443L766 440L764 478L754 479Z"/>
-  <ellipse cx="676" cy="470" rx="78" ry="48" fill="url(#feathers)"/>
-  <path fill="#B5BDD1" d="M640 446Q690 424 742 452Q722 494 668 494Q642 484 640 446Z"/>
-  <path fill="none" stroke="#4B5470" stroke-width="8" stroke-linecap="round" d="M668 458Q696 470 728 460"/>
-  <path fill="none" stroke="#4B5470" stroke-width="8" stroke-linecap="round" d="M672 476Q698 488 726 478"/>
-  <ellipse cx="614" cy="462" rx="44" ry="50" fill="url(#feathers)"/>
-  <path fill="url(#neck)" d="M586 412Q614 400 640 420Q648 446 636 466Q612 474 592 458Q580 436 586 412Z"/>
-  <circle cx="600" cy="392" r="31" fill="url(#feathers)"/>
-  <path fill="#5B6480" d="M572 391L553 398L572 403Z"/>
-  <circle cx="575" cy="388" r="5" fill="#FFFFFF"/>
-  <circle cx="592" cy="384" r="7.5" fill="#F97316"/>
-  <circle cx="592" cy="384" r="4.5" fill="#1E1B4B"/>
+  <path fill="#9AA3BC" d="M734 422L766 410L764 448L736 452Z"/>
+  <path fill="#4B5470" d="M756 413L766 410L764 448L754 449Z"/>
+  <ellipse cx="676" cy="440" rx="78" ry="48" fill="url(#feathers)"/>
+  <path fill="#B5BDD1" d="M640 416Q690 394 742 422Q722 464 668 464Q642 454 640 416Z"/>
+  <path fill="none" stroke="#4B5470" stroke-width="8" stroke-linecap="round" d="M668 428Q696 440 728 430"/>
+  <path fill="none" stroke="#4B5470" stroke-width="8" stroke-linecap="round" d="M672 446Q698 458 726 448"/>
+  <ellipse cx="614" cy="432" rx="44" ry="50" fill="url(#feathers)"/>
+  <path fill="url(#neck)" d="M586 382Q614 370 640 390Q648 416 636 436Q612 444 592 428Q580 406 586 382Z"/>
+  <circle cx="600" cy="362" r="31" fill="url(#feathers)"/>
+  <path fill="#5B6480" d="M572 361L553 368L572 373Z"/>
+  <circle cx="575" cy="358" r="5" fill="#FFFFFF"/>
+  <circle cx="592" cy="354" r="7.5" fill="#F97316"/>
+  <circle cx="592" cy="354" r="4.5" fill="#1E1B4B"/>
 
   <!-- Bottom-right: an envelope -->
-  <path fill="#FFFFFF" d="M588 616H712A16 16 0 0 1 728 632V708A16 16 0 0 1 712 724H588A16 16 0 0 1 572 708V632A16 16 0 0 1 588 616Z"/>
-  <path fill="none" stroke="url(#accent)" stroke-width="13" stroke-linejoin="round" stroke-linecap="round" d="M584 630L650 680L716 630"/>
+  <path fill="#FFFFFF" d="M588 586H712A16 16 0 0 1 728 602V678A16 16 0 0 1 712 694H588A16 16 0 0 1 572 678V602A16 16 0 0 1 588 586Z"/>
+  <path fill="none" stroke="url(#accent)" stroke-width="13" stroke-linejoin="round" stroke-linecap="round" d="M584 600L650 650L716 600"/>
 </svg>
