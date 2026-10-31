@@ -428,11 +428,13 @@ export default function App() {
                 <div className="filters">
                     <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>All</FilterChip>
                     <FilterChip active={filter === 'unread'} onClick={() => setFilter('unread')}>
-                        Unread{totalUnread > 0 && ` ${totalUnread}`}
+                        Unread{totalUnread > 0 && ` ${totalUnread > 99 ? "99+" : totalUnread}`}
                     </FilterChip>
+                    {/* Network chips show just the icon (named on hover), so the
+                        row stays on one line with every network connected. */}
                     {networks.map(n => (
-                        <FilterChip key={n} active={filter === n} onClick={() => setFilter(n)}>
-                            <NetworkIcon network={n} size={14}/>{NETWORK_LABELS[n] ?? n}
+                        <FilterChip key={n} active={filter === n} onClick={() => setFilter(n)} label={NETWORK_LABELS[n] ?? n}>
+                            <NetworkIcon network={n} size={16}/>
                         </FilterChip>
                     ))}
                 </div>
@@ -514,6 +516,9 @@ export default function App() {
     );
 }
 
-function FilterChip(props: {active: boolean; onClick: () => void; children: React.ReactNode}) {
-    return <button className={`chip ${props.active ? 'active' : ''}`} onClick={props.onClick}>{props.children}</button>;
+// label names an icon-only chip, for hover and screen readers.
+function FilterChip(props: {active: boolean; onClick: () => void; label?: string; children: React.ReactNode}) {
+    return <button className={`chip ${props.label ? 'icon-chip' : ''} ${props.active ? 'active' : ''}`}
+                   title={props.label} aria-label={props.label} aria-pressed={props.active}
+                   onClick={props.onClick}>{props.children}</button>;
 }

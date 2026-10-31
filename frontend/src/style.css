@@ -141,7 +141,7 @@ a { color: inherit; }
     flex-shrink: 0; background: var(--accent); color: var(--fg-on-accent); font-size: 10.5px; font-weight: 700;
     min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center;
 }
-.filters { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+.filters { display: flex; gap: 4px; padding: 0 16px 10px; flex-wrap: wrap; }
 .chip {
     display: inline-flex; align-items: center; gap: 6px;
     border: 1px solid var(--border);
@@ -151,6 +151,7 @@ a { color: inherit; }
     font-size: 12.5px;
 }
 .chip.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chip.icon-chip { padding: 3px 6px; }
 
 .network-icon { display: inline-block; flex-shrink: 0; vertical-align: middle; }
 .network-icon.fallback { border-radius: 50%; background: var(--fg-muted); }
