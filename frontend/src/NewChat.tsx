@@ -56,7 +56,7 @@ export default function NewChat(props: {onClose: () => void; onOpened: (roomId: 
                     <h2>New chat</h2>
                     <button className="icon-button" onClick={props.onClose}>✕</button>
                 </div>
-                <input className="search modal-search" spellCheck={false} placeholder="Search people by name" value={query}
+                <input className="search modal-search" spellCheck={false} placeholder="Search people by name or number" value={query}
                        onChange={e => setQuery(e.target.value)} autoFocus/>
                 {error && <div className="banner error">{error}</div>}
                 <ul className="people-list">
@@ -68,7 +68,7 @@ export default function NewChat(props: {onClose: () => void; onOpened: (roomId: 
                                     <Avatar name={p.name} src={p.avatar} size={36} network={p.network}/>
                                     <span className="person-name">{p.name}</span>
                                     <span className="muted person-action">
-                                        {opening === key ? 'Opening…' : p.roomId ? 'Open chat' : p.networkName}
+                                        {opening === key ? 'Opening…' : p.roomId ? 'Open chat' : p.number ? `Text on ${p.networkName}` : p.networkName}
                                     </span>
                                 </button>
                             </li>
@@ -81,7 +81,8 @@ export default function NewChat(props: {onClose: () => void; onOpened: (roomId: 
                     <p className="fine-print">
                         Find someone on any of your connected accounts to start or reopen a chat with them.
                         They aren't notified unless you send a message. On Messenger and Instagram, opening a
-                        new chat may move it to the top of your list on your other devices.
+                        new chat may move it to the top of your list on your other devices. On Google Messages,
+                        type a phone number to text it.
                     </p>
                 )}
             </div>

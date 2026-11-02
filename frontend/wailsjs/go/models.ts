@@ -389,6 +389,7 @@ export namespace inbox {
 	    name: string;
 	    avatar: string;
 	    roomId: string;
+	    number: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Person(source);
@@ -403,6 +404,7 @@ export namespace inbox {
 	        this.name = source["name"];
 	        this.avatar = source["avatar"];
 	        this.roomId = source["roomId"];
+	        this.number = source["number"];
 	    }
 	}
 	export class Seen {
