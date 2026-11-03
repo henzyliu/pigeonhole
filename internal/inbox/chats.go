@@ -98,6 +98,11 @@ type Message struct {
 	// Unsupported is set on a placeholder for something the bridge
 	// couldn't read (e.g. a Marketplace listing card), with OpenURL, if it
 	// gave one, to see it on the network's website.
+	// CardTitle and CardDetails are what a shared card says besides its
+	// picture, like an event's name and date.
+	CardTitle   string `json:"cardTitle"`
+	CardDetails string `json:"cardDetails"`
+
 	Unsupported bool   `json:"unsupported"`
 	OpenURL     string `json:"openUrl"`
 	// Pending is an edit or unsend of this message waiting for the network
@@ -427,6 +432,8 @@ func fillContent(m *Message, evtType, raw string) {
 	}
 	if m.Kind == "text" || m.Kind == "notice" {
 		m.Previews = linkPreviews(msg.BeeperLinkPreviews)
+	} else {
+		m.CardTitle, m.CardDetails = cardText(content.Raw)
 	}
 	if unsupported, _ := content.Raw["fi.mau.unsupported"].(bool); unsupported {
 		m.Unsupported = true
@@ -441,6 +448,27 @@ func fillContent(m *Message, evtType, raw string) {
 		link, _ := content.Raw["external_url"].(string)
 		m.Fetchable = fetchableKind(link)
 	}
+}
+
+// cardText gives what to show under a shared card's picture. A card with a
+// link and no other details is left alone: for an Instagram post, the title
+// is the post's whole caption, and the link is there to read it.
+func cardText(raw map[string]any) (title, details string) {
+	text := func(key string) string {
+		value, _ := raw[key].(string)
+		return strings.TrimSpace(value)
+	}
+	var parts []string
+	for _, part := range []string{text("fi.pigeonhole.card_subtitle"), text("fi.pigeonhole.card_description")} {
+		if part != "" && !slices.Contains(parts, part) {
+			parts = append(parts, part)
+		}
+	}
+	details = strings.Join(parts, " · ")
+	if details == "" && text("external_url") != "" {
+		return "", ""
+	}
+	return text("com.beeper.meta.full_post_title"), details
 }
 
 // linkPreviews keeps the previews worth showing: ones with a link and a

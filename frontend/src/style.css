@@ -317,6 +317,9 @@ button.thread-hide:hover { color: var(--fg); }
    a narrow window shrink it instead of the bubble sticking out. */
 .bubble.image, .bubble.video, .fetchable, .inline-video { min-width: 0; max-width: 100%; }
 .bubble.image .caption, .bubble.video .caption { padding: 6px 2px 0; color: var(--fg); }
+.card-text { padding: 6px 2px 0; color: var(--fg); }
+.card-title { font-weight: 600; }
+.card-details { margin-top: 2px; font-size: 0.9em; color: var(--fg-muted); }
 .bubble.notice { background: transparent; color: var(--fg-muted); font-style: italic; }
 .bubble.redacted { background: transparent !important; color: var(--fg-muted) !important; border: 1px dashed var(--border); }
 /* A link's preview card, under the message it came with. */

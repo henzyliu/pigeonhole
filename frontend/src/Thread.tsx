@@ -947,7 +947,15 @@ function SeenBy(props: {readers: inbox.Reader[]; isDm: boolean; isMe: boolean}) 
 
 function MessageBody({msg, highlight, onOpenMedia, onFetch}: {msg: inbox.Message; highlight: string; onOpenMedia: () => void; onFetch: () => Promise<void>}) {
     if (msg.redacted) return <em>Message deleted</em>;
-    const caption = msg.body ? <div className="caption">{linkify(msg.body, highlight)}</div> : null;
+    const caption = <>
+        {msg.body && <div className="caption">{linkify(msg.body, highlight)}</div>}
+        {(msg.cardTitle || msg.cardDetails) && (
+            <div className="card-text">
+                {msg.cardTitle && <div className="card-title">{msg.cardTitle}</div>}
+                {msg.cardDetails && <div className="card-details">{msg.cardDetails}</div>}
+            </div>
+        )}
+    </>;
     switch (msg.kind) {
         case 'image':
             // Always inside MediaFrame, so loading a post keeps this <img>

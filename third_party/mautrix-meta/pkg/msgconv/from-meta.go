@@ -146,6 +146,7 @@ func (mc *MessageConverter) ToMatrix(
 		importantPartIDs = append(importantPartIDs, partID)
 	}
 	var urlPreviews []*table.WrappedXMA
+	hasCard := false
 	for i, xmaAtt := range msg.XMAAttachments {
 		partID := networkid.PartID(fmt.Sprintf("xma_attachment_%d", i))
 		ctx := context.WithValue(ctx, mediadl.ContextKeyPartID, partID)
@@ -159,6 +160,13 @@ func (mc *MessageConverter) ToMatrix(
 		}
 		cm.Parts = append(cm.Parts, mc.xmaAttachmentToMatrix(ctx, xmaAtt)...)
 		importantPartIDs = append(importantPartIDs, partID)
+		hasCard = true
+		// Pigeonhole: record what Meta sent for a card that has no link or
+		// comes with a system notice (in the local log only), as nothing else
+		// says what it's about.
+		if msg.IsAdminMessage || xmaLink(xmaAtt) == "" {
+			logRawMessage(ctx, messageID, msg, "Card from Meta")
+		}
 	}
 	for i, sticker := range msg.Stickers {
 		partID := networkid.PartID(fmt.Sprintf("sticker_%d", i))
@@ -229,7 +237,9 @@ func (mc *MessageConverter) ToMatrix(
 			// be other "admin" messages that are important, but there is no structured
 			// data from Meta about what kind of message it is, so we can't really tell.
 			// Drop them all for now.
-			DontBridge: msg.IsAdminMessage,
+			// Pigeonhole: except one that comes with a card (someone creating
+			// an event, say), which explains the card.
+			DontBridge: msg.IsAdminMessage && !(hasCard && msg.Text != ""),
 		})
 	}
 	if len(cm.Parts) == 0 {
@@ -237,14 +247,7 @@ func (mc *MessageConverter) ToMatrix(
 		// can be understood and shown properly later. Marketplace chats start
 		// with two of them, probably the listing card and a "started a chat"
 		// notice.
-		if raw, err := json.Marshal(msg); err == nil {
-			const maxLogged = 16 << 10
-			if len(raw) > maxLogged {
-				raw = raw[:maxLogged]
-			}
-			zerolog.Ctx(ctx).Info().Str("message_id", string(messageID)).Str("raw_message", string(raw)).
-				Msg("Unsupported message from Meta")
-		}
+		logRawMessage(ctx, messageID, msg, "Unsupported message from Meta")
 		cm.Parts = append(cm.Parts, &bridgev2.ConvertedMessagePart{
 			Type: event.EventMessage,
 			Content: &event.MessageEventContent{
@@ -471,6 +474,34 @@ func (mc *MessageConverter) xmaLocationToMatrix(ctx context.Context, att *table.
 	}
 }
 
+// logRawMessage records a message as Meta sent it, in the local log only.
+func logRawMessage(ctx context.Context, messageID networkid.MessageID, msg *table.WrappedMessage, logMessage string) {
+	raw, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	const maxLogged = 16 << 10
+	if len(raw) > maxLogged {
+		raw = raw[:maxLogged]
+	}
+	zerolog.Ctx(ctx).Info().Str("message_id", string(messageID)).Str("raw_message", string(raw)).Msg(logMessage)
+}
+
+// xmaLink finds where a card leads: its button's link, or else its own.
+func xmaLink(att *table.WrappedXMA) string {
+	var link string
+	if att.CTA != nil {
+		link = att.CTA.ActionUrl
+	}
+	if link == "" {
+		link = att.ActionUrl
+	}
+	if !strings.HasPrefix(link, "https://") && !strings.HasPrefix(link, "http://") {
+		return ""
+	}
+	return removeLPHP(link)
+}
+
 func removeLPHP(addr string) string {
 	parsed, _ := url.Parse(addr)
 	if parsed != nil && parsed.Path == "/l.php" {
@@ -559,8 +590,7 @@ func (mc *MessageConverter) xmaAttachmentToMatrix(ctx context.Context, att *tabl
 		converted = errorToNotice(err, "XMA")
 	}
 	_, hasExternalURL := converted.Extra["external_url"]
-	if !hasExternalURL && att.CTA != nil && att.CTA.ActionUrl != "" {
-		externalURL := removeLPHP(att.CTA.ActionUrl)
+	if externalURL := xmaLink(att); !hasExternalURL && externalURL != "" {
 		converted.Extra["external_url"] = externalURL
 		addExternalURLCaption(converted.Content, externalURL)
 	}
@@ -568,6 +598,13 @@ func (mc *MessageConverter) xmaAttachmentToMatrix(ctx context.Context, att *tabl
 	if att.TitleText != "" || att.CaptionBodyText != "" {
 		converted.Extra["com.beeper.meta.full_post_title"] = att.TitleText
 		converted.Extra["com.beeper.meta.caption_body_text"] = att.CaptionBodyText
+	}
+	// Pigeonhole: the rest of what the card says, like an event's date.
+	if att.SubtitleText != "" {
+		converted.Extra["fi.pigeonhole.card_subtitle"] = att.SubtitleText
+	}
+	if att.DescriptionText != "" {
+		converted.Extra["fi.pigeonhole.card_description"] = att.DescriptionText
 	}
 	return parts
 }

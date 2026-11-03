@@ -321,6 +321,8 @@ export namespace inbox {
 	    seenBy: Reader[];
 	    fetchable: string;
 	    previews: LinkPreview[];
+	    cardTitle: string;
+	    cardDetails: string;
 	    unsupported: boolean;
 	    openUrl: string;
 	    pending: string;
@@ -355,6 +357,8 @@ export namespace inbox {
 	        this.seenBy = this.convertValues(source["seenBy"], Reader);
 	        this.fetchable = source["fetchable"];
 	        this.previews = this.convertValues(source["previews"], LinkPreview);
+	        this.cardTitle = source["cardTitle"];
+	        this.cardDetails = source["cardDetails"];
 	        this.unsupported = source["unsupported"];
 	        this.openUrl = source["openUrl"];
 	        this.pending = source["pending"];

@@ -742,3 +742,24 @@ func TestPinnedChat(t *testing.T) {
 		t.Fatalf("unpinning should stick (%v)", err)
 	}
 }
+
+// A card shows its title and details, unless it's a linked post whose title
+// is just its caption.
+func TestCardText(t *testing.T) {
+	const title, subtitle, description = "com.beeper.meta.full_post_title", "fi.pigeonhole.card_subtitle", "fi.pigeonhole.card_description"
+	for _, c := range []struct {
+		raw            map[string]any
+		wantT, wantDet string
+	}{
+		{map[string]any{title: "Quiz night"}, "Quiz night", ""},
+		{map[string]any{title: "Quiz night", subtitle: "Fri 7pm", description: "The pub"}, "Quiz night", "Fri 7pm · The pub"},
+		{map[string]any{title: "Quiz night", subtitle: "Fri", description: "Fri"}, "Quiz night", "Fri"},
+		{map[string]any{title: "A long caption", "external_url": "https://www.instagram.com/p/1/"}, "", ""},
+		{map[string]any{title: "Quiz night", subtitle: "Fri", "external_url": "https://facebook.com/events/1"}, "Quiz night", "Fri"},
+		{map[string]any{}, "", ""},
+	} {
+		if gotT, gotD := cardText(c.raw); gotT != c.wantT || gotD != c.wantDet {
+			t.Errorf("cardText(%v) = %q, %q", c.raw, gotT, gotD)
+		}
+	}
+}
