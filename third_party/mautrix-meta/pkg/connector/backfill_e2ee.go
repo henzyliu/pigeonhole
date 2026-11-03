@@ -82,6 +82,10 @@ func (m *MetaClient) convertArchiveMessage(ctx context.Context, portal *bridgev2
 		if supplemental == nil {
 			return nil, errors.New("missing Messenger archive supplemental")
 		}
+		// Pigeonhole: an unsent message stays in the history; leave it out.
+		if archiveRevokes(supplemental.Message, parent.Info.ID) {
+			return nil, nil
+		}
 		switch supplemental.Message.GetPayload().(type) {
 		case *waArmadilloBackupMessage.BackupMessage_EncryptedTransportEvent,
 			*waArmadilloBackupMessage.BackupMessage_EncryptedTransportLocallyTransformedMessage,

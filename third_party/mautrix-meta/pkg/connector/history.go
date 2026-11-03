@@ -134,6 +134,10 @@ func (m *MetaClient) fetchEncryptedHistory(ctx context.Context, params bridgev2.
 	slices.SortFunc(response.Messages, func(a, b *bridgev2.BackfillMessage) int {
 		return cmp.Or(a.Timestamp.Compare(b.Timestamp), cmp.Compare(a.ID, b.ID))
 	})
+	if params.Forward && params.AnchorMessage != nil {
+		// Pigeonhole: catch-up discards anything older than this; see archivegaps.go.
+		m.fillArchiveGaps(ctx, params.Portal, params.AnchorMessage, response.Messages)
+	}
 	if (params.Forward || params.AnchorMessage == nil) && len(response.Messages) > 0 {
 		readState, _ := m.historyReadStates.Get(metaid.ParseFBPortalID(params.Portal.ID))
 		response.MarkRead = readState.lastActivity > 0 && readState.readWatermark >= max(readState.lastActivity, newestTimestamp)

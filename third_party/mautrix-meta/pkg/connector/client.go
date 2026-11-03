@@ -48,6 +48,8 @@ type MetaClient struct {
 	tableLoopLock        sync.Mutex
 	backfillCollectors   map[int64]*BackfillCollector
 	historyReadStates    *exsync.Map[int64, historyReadState]
+	decryptCatchups      *exsync.Set[string]
+	gapCheckedThreads    *exsync.Set[string]
 	backfillLock         sync.Mutex
 	connectLock          sync.Mutex
 	pushRegistrationLock sync.Mutex
@@ -103,6 +105,8 @@ func (m *MetaConnector) LoadUserLogin(ctx context.Context, login *bridgev2.UserL
 		parsedTablesWake:   make(chan struct{}, 1),
 		backfillCollectors: make(map[int64]*BackfillCollector),
 		historyReadStates:  exsync.NewMap[int64, historyReadState](),
+		decryptCatchups:    exsync.NewSet[string](),
+		gapCheckedThreads:  exsync.NewSet[string](),
 
 		connectBackgroundWAOfflineSync: exsync.NewEvent(),
 
@@ -194,6 +198,7 @@ func (m *MetaClient) Connect(ctx context.Context) {
 	}
 	defer m.connectLock.Unlock()
 	m.historyReadStates.Clear()
+	m.gapCheckedThreads.Clear()
 	if m.metaState.StateEvent == "" && m.waState.StateEvent == "" {
 		// Ensure both states start at CONNECTING now
 		m.metaState.StateEvent = status.StateConnecting

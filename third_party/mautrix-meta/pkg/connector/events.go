@@ -675,7 +675,8 @@ func (r *FBChatResync) CheckNeedsBackfill(ctx context.Context, lastMessage *data
 		return true, nil
 	}
 	if r.Backfill == nil {
-		return false, nil
+		// Pigeonhole: look for messages missed earlier; see archivegaps.go.
+		return lastMessage != nil && r.checkThreadForGaps(), nil
 	} else if lastMessage == nil {
 		return true, nil
 	} else if metaid.MakeFBMessageID(r.Backfill.Range.MaxMessageId) == lastMessage.ID {

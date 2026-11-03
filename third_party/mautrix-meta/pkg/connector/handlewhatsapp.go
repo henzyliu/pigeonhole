@@ -36,6 +36,11 @@ func (m *MetaClient) e2eeEventHandler(rawEvt any) bool {
 			return false
 		}
 		return m.Main.Bridge.QueueRemoteEvent(m.UserLogin, &WAMessageEvent{FBMessage: evt, m: m}).Success
+	case *events.UndecryptableMessage:
+		// Pigeonhole: get the message from the secure history instead.
+		if evt.UnavailableType == "" {
+			m.catchUpAfterDecryptFailure(evt.Info.Chat)
+		}
 	case *events.ChatPresence:
 		m.handleWAChatPresence(m.Main.Bridge.BackgroundCtx, evt)
 	case *events.Receipt:
