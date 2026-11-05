@@ -90,7 +90,9 @@ func (m *MetaConnector) ResetNetworkConnections() {
 		if mc.Client != nil {
 			mc.Client.ForceReconnect()
 		}
-		if mc.E2EEClient != nil {
+		// Pigeonhole: cutting the connection off makes it reconnect at once,
+		// where a polite reset waits on a dead one; see conntrack.go.
+		if mc.E2EEClient != nil && !mc.e2eeConns.closeAll() {
 			mc.E2EEClient.ResetConnection()
 		}
 	}

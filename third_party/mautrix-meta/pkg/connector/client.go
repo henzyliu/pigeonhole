@@ -50,6 +50,7 @@ type MetaClient struct {
 	historyReadStates    *exsync.Map[int64, historyReadState]
 	decryptCatchups      *exsync.Set[string]
 	gapCheckedThreads    *exsync.Set[string]
+	e2eeConns            connTracker
 	backfillLock         sync.Mutex
 	connectLock          sync.Mutex
 	pushRegistrationLock sync.Mutex
@@ -533,6 +534,9 @@ func (m *MetaClient) connectE2EE() error {
 	}
 	if m.Main.Config.ProxyE2EE && m.Main.Config.Proxy != "" {
 		m.E2EEClient.SetProxyAddress(m.Main.Config.Proxy)
+	} else {
+		// Pigeonhole: so a reset can cut the connection off; see conntrack.go.
+		m.E2EEClient.SetWebsocketHTTPClient(&http.Client{Transport: m.e2eeConns.transport()})
 	}
 	if m.Main.Bridge.Config.PortalEventBuffer == 0 {
 		m.E2EEClient.SynchronousAck = true
