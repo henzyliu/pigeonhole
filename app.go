@@ -47,6 +47,10 @@ type App struct {
 	unreadTimer *time.Timer
 
 	updates updater
+
+	// messageActions is whether message alerts can carry Reply and Mark as
+	// read (their category registered).
+	messageActions bool
 }
 
 func NewApp(svc *inbox.Service, dataDir string, settings Settings, background bool) *App {
@@ -89,8 +93,17 @@ func (a *App) setupNotifications() {
 	if !a.GetSettings().NotificationsOff {
 		a.requestNotificationPermission()
 	}
-	// Clicking a notification brings the window forward on that chat.
+	a.messageActions = registerMessageActions(a.ctx, a.svc.Log)
+	// Clicking a notification brings the window forward on that chat; its
+	// Reply and Mark as read actions work without opening the window.
 	runtime.OnNotificationResponse(a.ctx, func(result runtime.NotificationResult) {
+		if result.Error != nil {
+			a.svc.Log.Warn().Err(result.Error).Msg("Notification response failed")
+			return
+		}
+		if a.handleMessageAction(result.Response) {
+			return
+		}
 		if network, ok := result.Response.UserInfo["signIn"].(string); ok {
 			a.showWindow()
 			runtime.EventsEmit(a.ctx, "accounts:signin", network)
@@ -145,12 +158,19 @@ func (a *App) setupNotifications() {
 		if n.Sender != "" {
 			body = n.Sender + ": " + body
 		}
-		err := runtime.SendNotification(a.ctx, runtime.NotificationOptions{
+		options := runtime.NotificationOptions{
 			ID:    n.RoomID,
 			Title: n.Title,
 			Body:  body,
 			Data:  map[string]any{"roomId": n.RoomID},
-		})
+		}
+		var err error
+		if a.messageActions {
+			options.CategoryID = messageCategory
+			err = runtime.SendNotificationWithActions(a.ctx, options)
+		} else {
+			err = runtime.SendNotification(a.ctx, options)
+		}
 		if err != nil {
 			a.svc.Log.Warn().Err(err).Str("room_id", n.RoomID).Msg("Failed to send notification")
 		} else {
