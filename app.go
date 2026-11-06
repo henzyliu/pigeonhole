@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"unified-inbox/internal/inbox"
 	"unified-inbox/internal/tray"
@@ -391,8 +392,12 @@ func migrateLegacyDataDir(legacy, dir string) error {
 
 func newLogger(dir string) zerolog.Logger {
 	writers := []io.Writer{zerolog.ConsoleWriter{Out: os.Stderr}}
-	if f, err := os.OpenFile(filepath.Join(dir, "logs", "inbox.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
-		writers = append(writers, f)
-	}
+	// Rotated so the log can't grow without limit: at most about 125MB on disk.
+	writers = append(writers, &lumberjack.Logger{
+		Filename:   filepath.Join(dir, "logs", "inbox.log"),
+		MaxSize:    25, // MB
+		MaxBackups: 4,
+		MaxAge:     30, // days
+	})
 	return zerolog.New(zerolog.MultiLevelWriter(writers...)).Level(zerolog.DebugLevel).With().Timestamp().Logger()
 }

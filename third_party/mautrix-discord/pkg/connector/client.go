@@ -301,7 +301,7 @@ func (d *DiscordClient) connectRetrying(ctx context.Context, retryCount int, pre
 		// Disconnect ran while Open was in progress, so its Close may have come too early.
 		// A newer connect attempt shares the session, so only close if nothing replaced us.
 		log.Debug().Msg("Disconnected while opening session, closing it again")
-		_ = d.Session.Close()
+		_ = d.Session.Stop()
 		return
 	}
 	if err != nil {
@@ -370,7 +370,9 @@ func (d *DiscordClient) connect(ctx context.Context) error {
 	// (e.g. an Op1 heartbeat request arriving before READY), in which case
 	// State.User is still nil and READY will land shortly via the listen
 	// goroutine.
-	err := d.Session.Open()
+	// Pigeonhole: Start (and Stop in Disconnect) so a disconnected session's
+	// own reconnect loop can't log back in alongside its replacement.
+	err := d.Session.Start()
 	if err != nil {
 		log.Err(err).Msg("Failed to connect to Discord")
 		return err
@@ -450,7 +452,7 @@ func (d *DiscordClient) Disconnect() {
 	}
 	d.UserLogin.Log.Info().Msg("Disconnecting session")
 	if d.Session != nil {
-		d.Session.Close()
+		d.Session.Stop()
 	}
 }
 

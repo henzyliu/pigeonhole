@@ -17,6 +17,7 @@ require (
 	go.mau.fi/whatsmeow v0.0.0-20261016130820-0b0a1cdac3e2
 	golang.org/x/image v0.47.0
 	golang.org/x/sys v0.49.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mautrix v0.32.0
 )
@@ -87,7 +88,6 @@ require (
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
 // replace github.com/wailsapp/wails/v2 v2.17.0 => /Users/henryliu/go/pkg/mod
@@ -98,4 +98,4 @@ replace go.mau.fi/mautrix-meta => ./third_party/mautrix-meta
 
 replace go.mau.fi/mautrix-discord => ./third_party/mautrix-discord
 
-replace github.com/bwmarrin/discordgo => github.com/beeper/discordgo v0.0.0-20261016105259-972d950892bf
+replace github.com/bwmarrin/discordgo => ./third_party/discordgo

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waArmadilloBackupMessage"
 	"go.mau.fi/whatsmeow/proto/waConsumerApplication"
@@ -125,7 +126,14 @@ func (m *MetaClient) convertArchiveMessage(ctx context.Context, portal *bridgev2
 		} else if content.GetPollUpdateMessage() != nil && parent.GetConsumerApplication().GetPayload().GetContent().GetPollCreationMessage() != nil {
 			continue
 		} else {
-			return nil, fmt.Errorf("unsupported Messenger archive supplemental %T", content.GetContent())
+			// Pigeonhole: an unrecognised extra (seen with no content at all) shouldn't
+			// lose the message it belongs to; note what it was and leave it out.
+			zerolog.Ctx(ctx).Warn().
+				Str("message_id", parent.Info.ID).
+				Str("supplemental_id", decoded.Info.ID).
+				Str("application", fmt.Sprintf("%T", decoded.Message)).
+				Str("content", fmt.Sprintf("%T", content.GetContent())).
+				Msg("Skipping unsupported Messenger archive supplemental")
 		}
 	}
 	if latestEdit != nil {

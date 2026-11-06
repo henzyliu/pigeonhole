@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/whatsmeow/types"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -125,11 +126,16 @@ func (m *MetaClient) fetchEncryptedHistory(ctx context.Context, params bridgev2.
 	for _, message := range messages {
 		converted, err := m.convertArchiveMessage(ctx, params.Portal, message)
 		if err != nil {
-			return nil, err
+			// Pigeonhole: one unreadable message used to fail every backfill of the chat.
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Str("message_id", archiveMessageID(message)).
+				Msg("Skipping Messenger archive message that couldn't be converted")
 		} else if converted != nil {
 			response.Messages = append(response.Messages, converted)
 		}
-		newestTimestamp = max(newestTimestamp, message.Message.TimestampMS)
+		if message != nil && message.Message != nil {
+			newestTimestamp = max(newestTimestamp, message.Message.TimestampMS)
+		}
 	}
 	slices.SortFunc(response.Messages, func(a, b *bridgev2.BackfillMessage) int {
 		return cmp.Or(a.Timestamp.Compare(b.Timestamp), cmp.Compare(a.ID, b.ID))
@@ -143,4 +149,11 @@ func (m *MetaClient) fetchEncryptedHistory(ctx context.Context, params bridgev2.
 		response.MarkRead = readState.lastActivity > 0 && readState.readWatermark >= max(readState.lastActivity, newestTimestamp)
 	}
 	return response, nil
+}
+
+func archiveMessageID(message *securehistory.DecryptedMessage) string {
+	if message == nil || message.Message == nil {
+		return ""
+	}
+	return message.Message.Message.GetMetadata().GetMessageID()
 }
